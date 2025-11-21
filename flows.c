@@ -17,17 +17,18 @@ typedef struct SNetDotGroup
 {
     int dotCount;
     netDot* dotArr;
-}netDotGroup;
+}netDotCluster;
 
 //Function declarations
 void fillNetDotData(int flowID, int totalBytes, int flowDuration, float avgInterarrivalTime, float avgInterarrivalLength);
-netDotGroup* initGroup(netDot dot);
-netDotGroup* uniteGroups(netDotGroup netDotGroup1, netDotGroup netDotGroup2);
+netDotCluster* initGroup(netDot dot);
+netDotCluster* uniteGroups(netDotCluster netDotGroup1, netDotCluster netDotGroup2);
 double findRange(netDot netDot1, netDot netDot2);
-double findClosestRange(netDotGroup netDotGroup1, netDotGroup netDotGroup2);
-netDotGroup* findClosestAndUnite(netDotGroup* netDotGroupArr);
-netDotGroup** uniteToNGroups(int destGroupCount, int currGroupCount, netDotGroup* netDotGroupArr);
-void infoOut(int currGroupCount, netDotGroup* netDotGroupArr);
+double findClosestRange(netDotCluster netDotGroup1, netDotCluster netDotGroup2);
+netDotCluster* findClosestAndUnite(netDotCluster* netDotGroupArr);
+netDotCluster** uniteToNGroups(int destGroupCount, int currGroupCount, netDotCluster* netDotGroupArr);
+void clusterOut(netDotCluster cluster);
+void infoOut(int currGroupCount, netDotCluster* netDotGroupArr);
 
 
 int main(int argc, char* argv[])
