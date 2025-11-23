@@ -55,15 +55,15 @@ netDot initNetDot(int flowID, int totalBytes, int flowDuration, double avgIntera
 }
 
 //initialises cluster using prepared array of netDots
-netDotCluster* initCluster(netDot* dots, int dotCount)
+netDotCluster* initCluster(netDot dots[], int dotCount)
 {
     netDotCluster *cluster = malloc(sizeof(netDotCluster));
-    *cluster.dotCount = dotCount;
-    *cluster->dotArr = malloc(sizeof(netDot)*dotCount);
+    cluster->dotCount = dotCount;
+    cluster->dotArr = malloc(sizeof(netDot)*dotCount);
 
     for (int i = 0; i < dotCount; i++)
     {
-        *cluster.dotArr[i] = dots[i];
+        cluster->dotArr[i] = dots[i];
     }
 
     return cluster;
@@ -99,12 +99,12 @@ void deleteEmptyClusters(netDotCluster* clusterArr, int *currClusterCount)
 void addNetDotsSorted(netDot* dots, netDot dotsToAdd[], int dotCount, int filledCount)
 {
     int lastBiggerInx = 0;
-    for (int i = filledCount; i =< 0; i--)
+    for (int i = filledCount; i <= 0; i--)
     {
         if (dots[i].flowID > dotsToAdd[filledCount].flowID)
             lastBiggerInx = i;
     }
-    for (int i = filledCount; i =< lastBiggerInx; i--)
+    for (int i = filledCount; i <= lastBiggerInx; i--)
     {
         dots[i+1] = dots[i];
     }
@@ -116,13 +116,13 @@ void addNetDotsSorted(netDot* dots, netDot dotsToAdd[], int dotCount, int filled
 }
 
 //creates 1 united cluster from 2 and deletes them
-netDotCluster* uniteClusters(netDotCluster *netDotCluster1, netDotCluster *netDotCluster2)
+netDotCluster* uniteClusters(netDotCluster netDotCluster1, netDotCluster netDotCluster2)
 {
-    int dotCount = *netDotCluster1.dotCount + *netDotCluster2.dotCount;
-    netDot dotsToAdd[arrLength];
+    int dotCount = netDotCluster1.dotCount + netDotCluster2.dotCount;
+    netDot dotsToAdd[dotCount];
 
     for (int i = 0; i < netDotCluster1.dotCount; i++)
-        dotsToAdd[i] = netDotCluster1->dotArr[i];
+        dotsToAdd[i] = netDotCluster1.dotArr[i];
 
     for (int i = netDotCluster2.dotCount; i < dotCount; i++)
         dotsToAdd[i+netDotCluster2.dotCount] = netDotCluster2.dotArr[i];
@@ -133,7 +133,7 @@ netDotCluster* uniteClusters(netDotCluster *netDotCluster1, netDotCluster *netDo
     prepareClusterRemoval(netDotCluster1);
     prepareClusterRemoval(netDotCluster2);
 
-    return initCluster(dots, dotCount)
+    return initCluster(dots, dotCount);
 }
 
 //founds range between 2 netDots
@@ -150,51 +150,39 @@ double findRange(netDot netDot1, netDot netDot2, weights weights)
 //finds closest range between 2 clusters
 double findClosestRange(netDotCluster netDotCluster1, netDotCluster netDotCluster2, weights weights)
 {
-    double closestFoundRange;
+    double closestFoundRange = findRange(netDotCluster1.dotArr[0],netDotCluster2.dotArr[0], weights);
     for (int i = 0; i < netDotCluster1.dotCount; i++)
     {
         for (int j = 0; j < netDotCluster2.dotCount; j++)
         {
-            if (closestFoundRange == NULL)
-            {
+            if(closestFoundRange > findRange(netDotCluster1.dotArr[i],netDotCluster2.dotArr[j], weights))
                 closestFoundRange = findRange(netDotCluster1.dotArr[i],netDotCluster2.dotArr[j], weights);
-            }
-            else
-            {
-                if(closestFoundRange > findRange(netDotCluster1.dotArr[i],netDotCluster2.dotArr[j], weights))
-                    closestFoundRange = findRange(netDotCluster1.dotArr[i],netDotCluster2.dotArr[j], weights);
-            }
         }
     }
     return closestFoundRange;
 }
 
 //finds closest pair of clusters and returns united cluster
-netDotCluster* findClosestAndUnite(netDotCluster* clusterArr, weights weights, int currClusterCount)
+netDotCluster* findClosestAndUnite(netDotCluster* clusterArr, weights weights, int *currClusterCount)
 {
-    int closestInx[2] = {0; 0};
-    double closestFoundRange;
+    int closestInx[2] = {0, 0};
+    double closestFoundRange = findClosestRange(clusterArr[0], clusterArr[0], weights);
 
-    for (int i = 0; i < currClusterCount-1; i++)
+    for (int i = 0; i < *currClusterCount-1; i++)
     {
-        for (int j = i+1; j < currClusterCount; j++)
+        for (int j = i+1; j < *currClusterCount; j++)
         {
-            if (closestFoundRange == NULL)
+
+            if(closestFoundRange > findClosestRange(clusterArr[i], clusterArr[j], weights))
             {
-                closestFoundRange = findClosestRange(clusterArr[i], clusterArr[j], weights);
+                closestFoundRange = findClosestRange(clusterArr[i], clusterArr[j], weights);;
+                closestInx[0] = i;
+                closestInx[1] = j;
             }
-            else
-            {
-                if(closestFoundRange > findClosestRange(clusterArr[i], clusterArr[j], weights);)
-                {
-                    closestFoundRange = findClosestRange(clusterArr[i], clusterArr[j], weights);;
-                    closestInx[0] = i;
-                    closestInx[1] = j;
-                }
-            }}}
+        }}
     netDotCluster *unitedCluster = uniteClusters(clusterArr[closestInx[0]], clusterArr[closestInx[0]]);
 
-    deleteEmptyClusters(clusterArr, currClusterCount)
+    deleteEmptyClusters(clusterArr, currClusterCount);
 
     return unitedCluster;
 }
