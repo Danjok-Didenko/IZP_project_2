@@ -66,9 +66,9 @@ void addNetDotsSorted(netDot* dots, netDot dotsToAdd[], int dotCount, int filled
     }
 }
 
-netDotCluster* uniteClusters(netDotCluster netDotCluster1, netDotCluster netDotCluster2)
+netDotCluster* uniteClusters(netDotCluster *netDotCluster1, netDotCluster *netDotCluster2)
 {
-    int dotCount = netDotCluster1.dotCount + netDotCluster2.dotCount;
+    int dotCount = *netDotCluster1.dotCount + *netDotCluster2.dotCount;
     netDot dotsToAdd[arrLength];
 
     for (int i = 0; i < netDotCluster1.dotCount; i++)
@@ -80,6 +80,10 @@ netDotCluster* uniteClusters(netDotCluster netDotCluster1, netDotCluster netDotC
     netDot dots[dotCount];
     addNetDotsSorted(dots, dotsToAdd, dotCount, 0);
 
+    free(*netDotCluster1->dotArr);
+    free(*netDotCluster2->dotArr);
+    free(*netDotCluster1);
+    free(*netDotCluster2);
     return initCluster(dots, dotCount)
 }
 
