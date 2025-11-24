@@ -133,6 +133,14 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
 cluster uniteClusters(cluster clusterA, cluster clusterB)
 {
     flow flows[clusterA.flowCount + clusterB.flowCount];
+    for (int i = 0; i < clusterA.flowCount; i++)
+    {
+        flows[i] = clusterA.flowArr[i];
+    }    
+    for (int i = 0; i < clusterB.flowCount; i++)
+    {
+        flows[i+clusterA.flowCount] = clusterB.flowArr[i];
+    }    
     return initCluster(flows, clusterA.flowCount + clusterB.flowCount);
 }
 
@@ -162,7 +170,7 @@ void uniteAndDelete(clusterStorage* storage, cluster clusterA, cluster clusterB)
         }
     }
     (storage->clusterCount)--;
-    cluster *tmp = realloc(storage->clusters, sizeof(cluster)*storage->clusterCount);
+    cluster *tmp = realloc(storage->clusters, sizeof(cluster)*(storage->clusterCount));
 
     //unsuccessful allocation check
     if (tmp == NULL)
