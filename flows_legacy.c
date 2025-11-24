@@ -165,26 +165,26 @@ cluster uniteClusters(cluster netDotCluster1, cluster netDotCluster2)
 }
 
 //founds range between 2 netDots
-double findRange(flow netDot1, flow netDot2, weights weights1)
+double findRange(flow flowA, flow flowB, weights weights1)
 {
     return sqrt(
-    weights1.bytes*squareInt(netDot1.totalBytes - netDot2.totalBytes) +
-    weights1.duration*squareInt(netDot1.flowDuration - netDot2.flowDuration) +
-    weights1.interTime*squareFloat(netDot1.avgInterarrivalTime - netDot2.avgInterarrivalTime) +
-    weights1.interLength* squareFloat(netDot1.avgInterarrivalLength - netDot2.avgInterarrivalLength)
+    weights1.bytes*squareInt(flowA.totalBytes - flowB.totalBytes) +
+    weights1.duration*squareInt(flowA.flowDuration - flowB.flowDuration) +
+    weights1.interTime*squareFloat(flowA.avgInterarrivalTime - flowB.avgInterarrivalTime) +
+    weights1.interLength* squareFloat(flowA.avgInterarrivalLength - flowB.avgInterarrivalLength)
     );
 }
 
 //finds closest range between 2 clusters
-double findClosestRange(cluster netDotCluster1, cluster netDotCluster2, weights weights1)
+double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
 {
-    double closestFoundRange = findRange(netDotCluster1.dotArr[0],netDotCluster2.dotArr[1], weights1);
-    for (int i = 0; i < netDotCluster1.flowCount; i++)
+    double closestFoundRange = findRange(netDotClusterA.dotArr[0],netDotClusterB.dotArr[1], weights);
+    for (int i = 0; i < netDotClusterA.flowCount; i++)
     {
-        for (int j = 0; j < netDotCluster2.flowCount; j++)
+        for (int j = 0; j < netDotClusterB.flowCount; j++)
         {
-            if(closestFoundRange > findRange(netDotCluster1.dotArr[i],netDotCluster2.dotArr[j], weights1))
-                closestFoundRange = findRange(netDotCluster1.dotArr[i],netDotCluster2.dotArr[j], weights1);
+            if(closestFoundRange > findRange(netDotClusterA.dotArr[i],netDotClusterB.dotArr[j], weights))
+                closestFoundRange = findRange(netDotClusterA.dotArr[i],netDotClusterB.dotArr[j], weights);
         }
     }
     return closestFoundRange;

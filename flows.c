@@ -19,6 +19,29 @@ typedef struct SCluster
     flow* flowArr;
 }cluster;
 
+typedef struct SClusterStorage
+{
+    int clusterCount;
+    cluster* clusters;
+}clusterStorage;
+
+typedef struct SWeights
+{
+    double bytes;
+    double duration;
+    double interTime;
+    double interLength;
+}weights;
+
+//Functions for sorting
+//-------------------------------------------------------------------------------------
+
+//function for qsort
+int compareID(const flow* a, const flow* b);
+
+//rearrange flow array by smallest flowID
+void sortByID(flow* flowArr, int flowCount);
+
 
 //Mathematical custom functions
 //-------------------------------------------------------------------------------------
@@ -37,12 +60,6 @@ int squareInt(int a)
 
 //Functions for working with flows and clusters
 //-------------------------------------------------------------------------------------
-
-//function for qsort
-int compareID(const flow* a, const flow* b);
-
-//rearrange flow array by smallest flowID
-void sortByID(flow* flowArr, int flowCount);
 
 //calculates average interarrival length
 double calculateAvgInterLength(int totalBytes, int packetCount)
@@ -69,17 +86,104 @@ cluster initCluster(flow flows[], int flowCount)
     cluster cluster;
 
     cluster.flowCount = flowCount;
-    flow* flowArr = malloc(sizeof(flow)*flowCount);
+    flow* tmp = malloc(sizeof(flow)*flowCount);
 
     //unsuccessful allocation check
-    if (flowArr == NULL)
+    if (tmp == NULL)
     {
+        fprintf(stderr, "Error alloc failed");
         exit(1);
     }
     else
     {
-        cluster.flowArr = flowArr;
+        cluster.flowArr = tmp;
+        for (int i = 0; i < flowCount; i++)
+        {
+            cluster.flowArr[i] = flows[i];
+        }
         return cluster;
     }
 }
 
+clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
+{
+    clusterStorage storage;
+    storage.clusterCount = clusterCount;
+    cluster* tmp = malloc(sizeof(cluster)*clusterCount);
+
+    //unsuccessful allocation check
+    if (tmp == NULL)
+    {
+        fprintf(stderr, "Error alloc failed");
+        exit(1);
+    }
+    else
+    {
+        storage.clusters = tmp;
+        for (int i = 0; i < clusterCount; i++)
+        {
+            storage.clusters[i] = clusters[i];
+        }
+        return storage;
+    }
+}
+
+
+//unites 2 clusters
+cluster uniteClusters(cluster clusterA, cluster clusterB)
+{
+    flow flows[clusterA.flowCount + clusterB.flowCount];
+    return initCluster(flows, clusterA.flowCount + clusterB.flowCount);
+}
+
+//prepares cluster for delete
+void prepareForDelete(cluster* cluster)
+{
+    free(cluster->flowArr);
+    cluster->flowArr = NULL;
+    cluster->flowCount = 0;
+}
+
+//unites 2 clusters and deletes originals
+void uniteAndDelete(clusterStorage* storage, cluster clusterA, cluster clusterB)
+{
+    cluster unitedCluster = uniteClusters(clusterA, clusterB);
+    prepareForDelete(&clusterA);
+    prepareForDelete(&clusterB);
+
+    for (int i = (storage->clusterCount)-1; i >= 0; i--)
+    {
+        if (storage->clusters[i].flowCount == 0)
+        {
+            for (int n = i; i < (storage->clusterCount)-2; i++)
+            {
+                storage->clusters[n] = storage->clusters[n+1];
+            }
+        }
+    }
+    (storage->clusterCount)--;
+    cluster *tmp = realloc(storage->clusters, sizeof(cluster)*storage->clusterCount);
+
+    //unsuccessful allocation check
+    if (tmp == NULL)
+    {
+        fprintf(stderr, "Error alloc failed");
+        exit(1);
+    }
+    else
+    {
+        storage->clusters = tmp;
+    }
+    storage->clusters[storage->clusterCount-1] = unitedCluster;
+}
+
+
+double findRange(flow flowA, flow flowB, weights weights)
+{
+    return sqrt(
+    weights.bytes*squareInt(flowA.totalBytes - flowB.totalBytes) +
+    weights.duration*squareInt(flowA.flowDuration - flowB.flowDuration) +
+    weights.interTime*squareFloat(flowA.avgInterTime - flowB.avgInterTime) +
+    weights.interLength* squareFloat(flowA.avgInterLength - flowB.avgInterLength)
+    );
+}
