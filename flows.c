@@ -299,7 +299,7 @@ int main(int argc, char* argv[])
     weights.interLength = strtod(argv[6], &endptr);
 
     int currClusterCount;
-    //int destClusterCount = strtol(argv[2], &endptr, 10);
+    int destClusterCount = strtol(argv[2], &endptr, 10);
 
     int flowID;
     int totalBytes;
@@ -327,9 +327,9 @@ int main(int argc, char* argv[])
 
     clusterStorage clusterStorage = initClusterStorage(tmpClusterArr, currClusterCount);
 
-    //uniteToNGroups(destClusterCount, &clusterStorage, weights);
-    findClosestAndUnite(&clusterStorage,weights);
-    findClosestAndUnite(&clusterStorage,weights);
+    uniteToNGroups(destClusterCount, &clusterStorage, weights);
+    // findClosestAndUnite(&clusterStorage,weights);
+    // findClosestAndUnite(&clusterStorage,weights);
 
     infoOut(clusterStorage);
 
