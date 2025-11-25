@@ -228,7 +228,7 @@ double findRange(flow flowA, flow flowB, weights weights)
 //finds closest range between 2 clusters
 double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
 {
-    double closestFoundRange;
+    double closestFoundRange = INFINITY;
     for (int i = 0; i < netDotClusterA.flowCount; i++)
     {
         for (int j = 0; j < netDotClusterB.flowCount; j++)
@@ -245,17 +245,13 @@ double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights 
 //finds closest pair of clusters and returns array with united cluster
 void findClosestAndUnite(clusterStorage* storage, weights weights1)
 {
-    int closestInx[2] = {0, 1};
-    double closestFoundRange = findClosestRange(storage->clusters[0], storage->clusters[1], weights1);
+    int closestInx[2];
+    double closestFoundRange = INFINITY;
 
     for (int i = 0; i < storage->clusterCount-1; i++)
     {
         for (int j = i+1; j < storage->clusterCount; j++)
         {
-            if (storage->clusters[i].flowArr[1].flowID == storage->clusters[j].flowArr[1].flowID)
-            {
-                continue;
-            }
             if(closestFoundRange > findClosestRange(storage->clusters[i], storage->clusters[j], weights1))
             {
                 closestFoundRange = findClosestRange(storage->clusters[i], storage->clusters[j], weights1);;
@@ -270,15 +266,14 @@ void findClosestAndUnite(clusterStorage* storage, weights weights1)
 //finds and unites clusters until their number reaches wanted count
 void uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
 {
-    if (destClusterCount == storage->clusterCount)
+    if (destClusterCount != storage->clusterCount)
     {
-        exit(0);
+        do
+        {
+            findClosestAndUnite(storage, weights);
+        }
+        while (destClusterCount != storage->clusterCount);
     }
-    do
-    {
-        findClosestAndUnite(storage, weights);
-    }
-    while (destClusterCount != storage->clusterCount);
     sortClustersByID(storage->clusters, storage->clusterCount);
 }
 
