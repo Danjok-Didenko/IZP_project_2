@@ -25,9 +25,6 @@ typedef struct SClusterStorage
     cluster* clusters;
 }clusterStorage;
 
-void clusterOut(cluster cluster, int clusterInx);
-void infoOut(clusterStorage storage);
-
 typedef struct SWeights
 {
     double bytes;
@@ -40,10 +37,38 @@ typedef struct SWeights
 //-------------------------------------------------------------------------------------
 
 //function for qsort
-int compareID(const flow* a, const flow* b);
+int compareFlowsID(const void* a, const void* b)
+{
+    int arg1 = ((const flow*)a)->flowID;
+    int arg2 = ((const flow*)b)->flowID;
+
+    if (arg1 < arg2) return -1;
+    if (arg1 > arg2) return 1;
+    return 0;
+}
 
 //rearrange flow array by smallest flowID
-void sortByID(flow* flowArr, int flowCount);
+void sortFlowsByID(flow* flowArr, int flowCount)
+{
+    qsort(flowArr, flowCount, sizeof(flow), compareFlowsID);
+}
+
+
+//function for qsort
+int compareClustersID(const void* a, const void* b)
+{
+    int arg1 = ((const cluster*)a)->flowArr[0].flowID;
+    int arg2 = ((const cluster*)b)->flowArr[0].flowID;
+
+    if (arg1 < arg2) return -1;
+    if (arg1 > arg2) return 1;
+    return 0;
+}
+//rearrange flow array by smallest flowID
+void sortClustersByID(cluster* clusters, int clusterCount)
+{
+    qsort(clusters, clusterCount, sizeof(cluster), compareClustersID);
+}
 
 
 //Mathematical custom functions
@@ -94,12 +119,13 @@ cluster initCluster(flow flows[], int flowCount)
     //unsuccessful allocation check
     if (tmp == NULL)
     {
-        fprintf(stderr, "Error alloc failed");
+        fprintf(stderr, "Error alloc failed\n");
         exit(1);
     }
     else
     {
         cluster.flowArr = tmp;
+        sortFlowsByID(flows, flowCount);
         for (int i = 0; i < flowCount; i++)
         {
             cluster.flowArr[i] = flows[i];
@@ -117,7 +143,7 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     //unsuccessful allocation check
     if (tmp == NULL)
     {
-        fprintf(stderr, "Error alloc failed");
+        fprintf(stderr, "Error alloc failed\n");
         exit(1);
     }
     else
@@ -174,13 +200,11 @@ void uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *cluster
     }
     (storage->clusterCount)--;
     storage->clusters[(storage->clusterCount)-1] = unitedCluster;
-
     cluster *tmp = realloc(storage->clusters, sizeof(cluster)*storage->clusterCount);
-
     //unsuccessful allocation check
     if (tmp == NULL)
     {
-        fprintf(stderr, "Error alloc failed");
+        fprintf(stderr, "Error alloc failed\n");
         exit(1);
     }
     else
@@ -204,13 +228,15 @@ double findRange(flow flowA, flow flowB, weights weights)
 //finds closest range between 2 clusters
 double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
 {
-    double closestFoundRange = findRange(netDotClusterA.flowArr[0],netDotClusterB.flowArr[1], weights);
+    double closestFoundRange;
     for (int i = 0; i < netDotClusterA.flowCount; i++)
     {
         for (int j = 0; j < netDotClusterB.flowCount; j++)
         {
             if(closestFoundRange > findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights))
+            {
                 closestFoundRange = findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights);
+            }
         }
     }
     return closestFoundRange;
@@ -238,24 +264,28 @@ void findClosestAndUnite(clusterStorage* storage, weights weights1)
             }
         }
     }
-
     uniteAndDelete(storage, &storage->clusters[closestInx[0]], &storage->clusters[closestInx[1]]);
 }
 
 //finds and unites clusters until their number reaches wanted count
 void uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
 {
+    if (destClusterCount == storage->clusterCount)
+    {
+        exit(0);
+    }
     do
     {
         findClosestAndUnite(storage, weights);
     }
     while (destClusterCount != storage->clusterCount);
+    sortClustersByID(storage->clusters, storage->clusterCount);
 }
 
 //prints info about exact cluster
 void clusterOut(cluster cluster, int clusterInx)
 {
-    printf("cluster %i ", clusterInx);
+    printf("cluster %i: ", clusterInx);
 
     for (int i = 0; i < cluster.flowCount; i++)
     {
@@ -279,7 +309,7 @@ int main(int argc, char* argv[])
 {
     if (argc != 7)
     {
-        fprintf(stderr, "ERROR: Wrong arguments");
+        fprintf(stderr, "ERROR: Wrong arguments\n");
         return 1;
     }
 
@@ -287,7 +317,7 @@ int main(int argc, char* argv[])
 
     if (srcFile == NULL)
     {
-        fprintf(stderr, "ERROR: Failed to open the file");
+        fprintf(stderr, "ERROR: Failed to open the file\n");
         return 1;
     }
 
