@@ -3,6 +3,8 @@
 #include <math.h>
 #include <ctype.h>
 
+
+//structure for storing all flow's arguments
 typedef struct SFlow
 {
     int flowID;
@@ -12,19 +14,21 @@ typedef struct SFlow
     double avgInterLength;
 }flow;
 
-
+//structure for storing all clusters flows as well as flow's count for more convenient use
 typedef struct SCluster
 {
     int flowCount;
     flow* flowArr;
 }cluster;
 
+//structure for storing all clusters as well as cluster count for more convenient use in functions
 typedef struct SClusterStorage
 {
     int clusterCount;
     cluster* clusters;
 }clusterStorage;
 
+//structure for storing all user-entered weights in one place for more convenient usage in functions
 typedef struct SWeights
 {
     double bytes;
@@ -36,9 +40,10 @@ typedef struct SWeights
 //Functions for sorting
 //-------------------------------------------------------------------------------------
 
-//function for qsort
+//functions for qsort compare
 int compareFlowsID(const void* a, const void* b)
 {
+    //we are sorting flows by flowIDs, so we compare them
     int arg1 = ((const flow*)a)->flowID;
     int arg2 = ((const flow*)b)->flowID;
 
@@ -47,16 +52,9 @@ int compareFlowsID(const void* a, const void* b)
     return 0;
 }
 
-//rearrange flow array by smallest flowID
-void sortFlowsByID(flow* flowArr, int flowCount)
-{
-    qsort(flowArr, flowCount, sizeof(flow), compareFlowsID);
-}
-
-
-//function for qsort
 int compareClustersID(const void* a, const void* b)
 {
+    //we are sorting clusters by smallest first flow's ID (we assume, that flow in cluster were sorted)
     int arg1 = ((const cluster*)a)->flowArr[0].flowID;
     int arg2 = ((const cluster*)b)->flowArr[0].flowID;
 
@@ -64,9 +62,18 @@ int compareClustersID(const void* a, const void* b)
     if (arg1 > arg2) return 1;
     return 0;
 }
-//rearrange flow array by smallest flowID
+
+//sort flow array by smallest flowID
+void sortFlowsByID(flow* flowArr, int flowCount)
+{
+    //just use qsort function
+    qsort(flowArr, flowCount, sizeof(flow), compareFlowsID);
+}
+
+//sort flow array by smallest flowID
 void sortClustersByID(cluster* clusters, int clusterCount)
 {
+    //just use qsort function
     qsort(clusters, clusterCount, sizeof(cluster), compareClustersID);
 }
 
@@ -92,12 +99,15 @@ int squareInt(int a)
 //calculates average interarrival length
 double calculateAvgInterLength(int totalBytes, int packetCount)
 {
-    return (double)totalBytes/(double)packetCount;
+    //conversion of one of the arguments to double is essential, since if not we will receive integer,
+    //but there is absolutely no sense to store any of these as double
+    return (double)totalBytes/packetCount;
 }
 
 //initialises flow with entered params
 flow initFlow(int flowID, int totalBytes, int flowDuration, int packetCount, double avgInterarrivalTime)
 {
+    //just creating new flow type variable and placing values in it
     flow flow;
     flow.flowID = flowID;
     flow.totalBytes = totalBytes;
@@ -111,8 +121,10 @@ flow initFlow(int flowID, int totalBytes, int flowDuration, int packetCount, dou
 //creates cluster with given flows and given number
 cluster initCluster(flow flows[], int flowCount)
 {
+    //create cluster type variable
     cluster cluster;
 
+    //alloc memory for given flow count
     cluster.flowCount = flowCount;
     flow* tmp = malloc(sizeof(flow)*flowCount);
 
@@ -124,7 +136,10 @@ cluster initCluster(flow flows[], int flowCount)
     }
     else
     {
+        //if successful store pointer and place all data from given flow array to flow array inside the cluster
         cluster.flowArr = tmp;
+
+        //sorts flows by their ID
         sortFlowsByID(flows, flowCount);
         for (int i = 0; i < flowCount; i++)
         {
@@ -134,9 +149,13 @@ cluster initCluster(flow flows[], int flowCount)
     }
 }
 
+//creates cluster storage from given clusters and their count
 clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
 {
+    //create empty cluster storage
     clusterStorage storage;
+
+    //allocate memory for given cluster count
     storage.clusterCount = clusterCount;
     cluster* tmp = malloc(sizeof(cluster)*clusterCount);
 
@@ -148,11 +167,12 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     }
     else
     {
+        //if successful store pointer and store all clusters given in array
+        storage.clusters = tmp;
         for (int i = 0; i < clusterCount; i++)
         {
-            tmp[i] = clusters[i];
+            storage.clusters[i] = clusters[i];
         }
-        storage.clusters = tmp;
         return storage;
     }
 }
@@ -161,11 +181,15 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
 //unites 2 clusters
 cluster uniteClusters(cluster clusterA, cluster clusterB)
 {
+    //create array for storing flows by flowCounts from both clusters
     flow flows[clusterA.flowCount + clusterB.flowCount];
+
+    //placing all flows from clusterA to united flow array
     for (int i = 0; i < clusterA.flowCount; i++)
     {
         flows[i] = clusterA.flowArr[i];
     }
+    //placing all flows from clusterB to united flow array
     for (int i = 0; i < clusterB.flowCount; i++)
     {
         flows[i+clusterA.flowCount] = clusterB.flowArr[i];
@@ -176,20 +200,30 @@ cluster uniteClusters(cluster clusterA, cluster clusterB)
 //prepares cluster for delete
 void prepareForDelete(cluster* cluster)
 {
+    //frees flow array of cluster
     free(cluster->flowArr);
+
+    //replaces pointer with NULL
     cluster->flowArr = NULL;
+
+    //marks cluster as empty changing its flowCount with -1
     cluster->flowCount = -1;
 }
 
 //unites 2 clusters and deletes originals
 void uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB)
 {
+    //call function which creates united cluster
     cluster unitedCluster = uniteClusters(*clusterA, *clusterB);
+
+    //prepares united clusters for deletion
     prepareForDelete(clusterA);
     prepareForDelete(clusterB);
 
+    //traverses cluster storage
     for (int i = (storage->clusterCount)-1; i >= 0; i--)
     {
+        //if finds empty cluster, deletes it leaving no empty places in array
         if (storage->clusters[i].flowCount == -1)
         {
             for (int n = i; n < (storage->clusterCount)-1; n++)
@@ -198,8 +232,14 @@ void uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *cluster
             }
         }
     }
+
+    //update clusterCount
     (storage->clusterCount)--;
+
+    //append united cluster to end of array
     storage->clusters[(storage->clusterCount)-1] = unitedCluster;
+
+    //realloc to new address
     cluster *tmp = realloc(storage->clusters, sizeof(cluster)*storage->clusterCount);
     //unsuccessful allocation check
     if (tmp == NULL)
@@ -211,7 +251,6 @@ void uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *cluster
     {
         storage->clusters = tmp;
     }
-    storage->clusters[storage->clusterCount-1] = unitedCluster;
 }
 
 //finds range between 2 netDots
@@ -228,6 +267,7 @@ double findRange(flow flowA, flow flowB, weights weights)
 //finds closest range between 2 clusters
 double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
 {
+    //finds closest possible range between 2 clusters by checking ranges between every flow pair
     double closestFoundRange = INFINITY;
     for (int i = 0; i < netDotClusterA.flowCount; i++)
     {
@@ -245,9 +285,11 @@ double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights 
 //finds closest pair of clusters and returns array with united cluster
 void findClosestAndUnite(clusterStorage* storage, weights weights1)
 {
+    //preparing container for storing 2 indexes of clusters in cluster storage
     int closestInx[2];
     double closestFoundRange = INFINITY;
 
+    //searches for closest pair
     for (int i = 0; i < storage->clusterCount-1; i++)
     {
         for (int j = i+1; j < storage->clusterCount; j++)
@@ -260,12 +302,15 @@ void findClosestAndUnite(clusterStorage* storage, weights weights1)
             }
         }
     }
+    //unites found closest pair and appends it to cluster storage
     uniteAndDelete(storage, &storage->clusters[closestInx[0]], &storage->clusters[closestInx[1]]);
 }
 
 //finds and unites clusters until their number reaches wanted count
 void uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
 {
+    //if start count of clusters and destinations ones are not same starts cycle which finds and unites cluster
+    //to the point when destination is reached
     if (destClusterCount != storage->clusterCount)
     {
         do
@@ -274,6 +319,8 @@ void uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weigh
         }
         while (destClusterCount != storage->clusterCount);
     }
+
+    //sorts clusters in storage
     sortClustersByID(storage->clusters, storage->clusterCount);
 }
 
@@ -300,22 +347,67 @@ void infoOut(clusterStorage storage)
     }
 }
 
+//creates cluster from source file
+clusterStorage collectInfoFromSourceFile(FILE* srcFile)
+{
+    //init all essential variables for temporary storing data
+    int currClusterCount;
+    int flowID;
+    int totalBytes;
+    int flowDuration;
+    int packetCount;
+    double avgInterarrivalTime;
+
+    //finds start cluster count
+    fscanf(srcFile, "count=%i\n", &currClusterCount);
+
+    //init tmp cluster storage
+    cluster tmpClusterArr[currClusterCount];
+
+    //all clusters in start have only 1 flow, but intCluster function requires array,
+    //so we just sore single number in array form
+    flow flows[1];
+
+    //traverses left source file lines scanning every line and storing important info to tmp variables
+    for (int i = 0; i < currClusterCount; i++)
+    {
+        fscanf(srcFile, "%i %*s %*s %i %i %i %lf\n",
+            &flowID, &totalBytes, &flowDuration,
+            &packetCount, &avgInterarrivalTime);
+
+        //inits flow from tmp variables
+        flows[0] =  initFlow(flowID, totalBytes, flowDuration, packetCount, avgInterarrivalTime);
+
+        //creates cluster and appends it to temporary array
+        tmpClusterArr[i] = initCluster(flows, 1);
+    }
+    //closes file
+    fclose(srcFile);
+
+    //returns results in form of cluster storage
+    return initClusterStorage(tmpClusterArr, currClusterCount);
+}
+
 int main(int argc, char* argv[])
 {
+    //check if argument number is correct, if not stops program with error
     if (argc != 7)
     {
         fprintf(stderr, "ERROR: Wrong arguments\n");
         return 1;
     }
 
+    //open file name of which was given
     FILE* srcFile = fopen(argv[1], "r");
 
+    //if not opened not stops program with error
     if (srcFile == NULL)
     {
         fprintf(stderr, "ERROR: Failed to open the file\n");
         return 1;
     }
 
+    //inits weights united storage and stores all given data in it
     weights weights;
     char *endptr;
     weights.bytes = strtod(argv[3], &endptr);
@@ -323,45 +415,25 @@ int main(int argc, char* argv[])
     weights.interTime = strtod(argv[5], &endptr);
     weights.interLength = strtod(argv[6], &endptr);
 
-    int currClusterCount;
-    int destClusterCount = strtol(argv[2], &endptr, 10);
+    //stores destination cluster count
+    int destClusterCount = atoi(argv[2]);
 
-    int flowID;
-    int totalBytes;
-    int flowDuration;
-    int packetCount;
-    double avgInterarrivalTime;
+    //forms cluster storage from source file
+    clusterStorage clusterStorage = collectInfoFromSourceFile(srcFile);
 
-    fscanf(srcFile, "count=%i\n", &currClusterCount);
-
-    cluster tmpClusterArr[currClusterCount];
-    flow flows[1];
-
-
-    for (int i = 0; i < currClusterCount; i++)
-    {
-        fscanf(srcFile, "%i %*s %*s %i %i %i %lf\n",
-            &flowID, &totalBytes, &flowDuration,
-            &packetCount, &avgInterarrivalTime);
-
-        flow flow = initFlow(flowID, totalBytes, flowDuration, packetCount, avgInterarrivalTime);
-        flows[0] = flow;
-        tmpClusterArr[i] = initCluster(flows, 1);
-    }
-    fclose(srcFile);
-
-    clusterStorage clusterStorage = initClusterStorage(tmpClusterArr, currClusterCount);
-
+    //starts uniting process
     uniteToNGroups(destClusterCount, &clusterStorage, weights);
-    // findClosestAndUnite(&clusterStorage,weights);
-    // findClosestAndUnite(&clusterStorage,weights);
 
+    //prints out info about clusters
     infoOut(clusterStorage);
 
+    //prepares all clusters in cluster storage for deletion
     for (int i = 0; i < clusterStorage.clusterCount; i++)
     {
         prepareForDelete(&(clusterStorage.clusters[i]));
     }
+
+    //frees cluster storage
     free(clusterStorage.clusters);
 
     return 0;
