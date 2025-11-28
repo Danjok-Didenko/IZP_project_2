@@ -388,6 +388,7 @@ clusterStorage collectInfoFromSourceFile(FILE* srcFile)
     return initClusterStorage(tmpClusterArr, currClusterCount);
 }
 
+//the place where every function's call starts
 int main(int argc, char* argv[])
 {
     //check if argument number is correct, if not stops program with error
