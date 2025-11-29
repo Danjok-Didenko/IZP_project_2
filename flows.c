@@ -132,7 +132,7 @@ cluster initCluster(flow flows[], int flowCount)
     if (tmp == NULL)
     {
         fprintf(stderr, "Error alloc failed\n");
-        exit(1);
+        cluster.flowCount = -1;
     }
     else
     {
@@ -145,8 +145,8 @@ cluster initCluster(flow flows[], int flowCount)
         {
             cluster.flowArr[i] = flows[i];
         }
-        return cluster;
     }
+    return cluster;
 }
 
 //creates cluster storage from given clusters and their count
@@ -163,7 +163,7 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     if (tmp == NULL)
     {
         fprintf(stderr, "Error alloc failed\n");
-        exit(1);
+        storage.clusterCount = -1;
     }
     else
     {
@@ -173,8 +173,8 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
         {
             storage.clusters[i] = clusters[i];
         }
-        return storage;
     }
+    return storage;
 }
 
 
@@ -211,11 +211,16 @@ void prepareForDelete(cluster* cluster)
 }
 
 //unites 2 clusters and deletes originals
-void uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB)
+int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB)
 {
     //call function which creates united cluster
     cluster unitedCluster = uniteClusters(*clusterA, *clusterB);
 
+    if (untedCluster.flowCount == -1)
+    {
+        return 1;
+    }
+    
     //prepares united clusters for deletion
     prepareForDelete(clusterA);
     prepareForDelete(clusterB);
@@ -245,12 +250,13 @@ void uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *cluster
     if (tmp == NULL)
     {
         fprintf(stderr, "Error alloc failed\n");
-        exit(1);
+        return 1;
     }
     else
     {
         storage->clusters = tmp;
     }
+    return 0;
 }
 
 //finds range between 2 netDots
@@ -283,7 +289,7 @@ double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights 
 }
 
 //finds closest pair of clusters and returns array with united cluster
-void findClosestAndUnite(clusterStorage* storage, weights weights1)
+int findClosestAndUnite(clusterStorage* storage, weights weights1)
 {
     //preparing container for storing 2 indexes of clusters in cluster storage
     int closestInx[2];
@@ -302,12 +308,16 @@ void findClosestAndUnite(clusterStorage* storage, weights weights1)
             }
         }
     }
-    //unites found closest pair and appends it to cluster storage
-    uniteAndDelete(storage, &storage->clusters[closestInx[0]], &storage->clusters[closestInx[1]]);
+    //unites found closest pair and appends it to cluster storage, and checks, if everything is ok
+    if (uniteAndDelete(storage, &storage->clusters[closestInx[0]], &storage->clusters[closestInx[1]]) != 0)
+    {
+        return 1;
+    }
+    return 0;
 }
 
 //finds and unites clusters until their number reaches wanted count
-void uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
+int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
 {
     //if start count of clusters and destinations ones are not same starts cycle which finds and unites cluster
     //to the point when destination is reached
@@ -315,13 +325,17 @@ void uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weigh
     {
         do
         {
-            findClosestAndUnite(storage, weights);
+            if (findClosestAndUnite(storage, weights) != 0)
+            {
+                return 0;
+            }
         }
         while (destClusterCount != storage->clusterCount);
     }
 
     //sorts clusters in storage
     sortClustersByID(storage->clusters, storage->clusterCount);
+    return 0;
 }
 
 //prints info about exact cluster
@@ -421,9 +435,17 @@ int main(int argc, char* argv[])
 
     //forms cluster storage from source file
     clusterStorage clusterStorage = collectInfoFromSourceFile(srcFile);
+    
+    if (clusterStorage.clusterCount == -1)
+    {
+        return 1;
+    }
 
     //starts uniting process
-    uniteToNGroups(destClusterCount, &clusterStorage, weights);
+    if (uniteToNGroups(destClusterCount, &clusterStorage, weights) != 0)
+    {
+        return 1;
+    }
 
     //prints out info about clusters
     infoOut(clusterStorage);
