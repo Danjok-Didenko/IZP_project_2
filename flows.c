@@ -4,6 +4,13 @@
 #include <ctype.h>
 
 
+enum programStage
+{
+    inputProcessing,
+    fileRead,
+    searchingAndUniting
+};
+
 //structure for storing all flow's arguments
 typedef struct SFlow
 {
@@ -37,8 +44,23 @@ typedef struct SWeights
     double interLength;
 }weights;
 
-//Functions for sorting
+//Functions for data control and scanf error solving
 //-------------------------------------------------------------------------------------
+void finishProgramWithError(int programStage, FILE* srcFile)
+{
+    switch (programStage)
+    {
+        case inputProcessing:
+            fprintf(stderr, "Error: Something is wrong with entered arguments\n");
+            break;
+        case fileRead:
+            fclose(srcFile);
+            fprintf(stderr, "Error: Something is wrong with input file\n");
+            break;
+        default:
+            fprintf(stderr, "Error: Something is wrong\n");
+    }
+}
 
 //functions for qsort compare
 int compareFlowsID(const void* a, const void* b)
