@@ -238,7 +238,7 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
     //call function which creates united cluster
     cluster unitedCluster = uniteClusters(*clusterA, *clusterB);
 
-    if (untedCluster.flowCount == -1)
+    if (unitedCluster.flowCount == -1)
     {
         return 1;
     }
@@ -381,6 +381,25 @@ void infoOut(clusterStorage storage)
     {
         clusterOut(storage.clusters[i], i);
     }
+}
+
+//controlls if IP is relevant
+int controlIP(FILE* srcFile)
+{
+    int tmpIP[4];
+
+    for (int i = 0; i < 2; i++)
+    {
+        if (fscanf(srcFile, "%i.%i.%i.%i ", &tmpIP[0], &tmpIP[1], &tmpIP[2], &tmpIP[3]) != 4)
+            return 1;
+
+        for (int n = 0; n < 4; n++)
+        {
+            if (tmpIP[n] >= 0 && tmpIP[n] < 256)
+                return 1;
+        }
+    }
+    return 0;
 }
 
 //creates cluster from source file
