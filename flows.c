@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <math.h>
 #include <ctype.h>
-
+#include <stdbool.h>
 
 enum programStage
 {
     inputProcessing,
+    fileOpen,
     fileRead,
-    searchingAndUniting
+    afterRead
 };
 
 //structure for storing all flow's arguments
@@ -44,19 +45,42 @@ typedef struct SWeights
     double interLength;
 }weights;
 
-//Functions for data control and scanf error solving
-//-------------------------------------------------------------------------------------
-void finishProgramWithError(int programStage, FILE* srcFile)
+//function declaration (used only here for 1 purpose)
+void prepareForDelete(cluster* cluster);
+
+//function for finishing program
+void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage *clusterStorage)
 {
     switch (programStage)
     {
         case inputProcessing:
             fprintf(stderr, "Error: Something is wrong with entered arguments\n");
             break;
+        case fileOpen:
+            fprintf(stderr, "Error: File failed to read\n");
+            break;
         case fileRead:
             fclose(srcFile);
             fprintf(stderr, "Error: Something is wrong with input file\n");
             break;
+        case afterRead:
+            if (isError)
+            {
+                fprintf(stderr, "Error: Some allocation failed\n");
+            }
+            //prepares all clusters in cluster storage for deletion
+            for (int i = 0; i < clusterStorage->clusterCount; i++)
+            {
+                prepareForDelete(&(clusterStorage->clusters[i]));
+            }
+
+            //frees cluster storage if it was inited
+            if (clusterStorage->clusterCount !=-1)
+            {
+                free(clusterStorage->clusters);
+            }
+            break;
+
         default:
             fprintf(stderr, "Error: Something is wrong\n");
     }
