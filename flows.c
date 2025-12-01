@@ -46,8 +46,6 @@ typedef struct SWeights
     double interLength;
 }weights;
 
-//TODO - Range storage structure
-
 //function declaration (used only here for 1 purpose)
 void prepareForDelete(cluster* cluster);
 
@@ -226,8 +224,6 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     return storage;
 }
 
-//TODO - Range storage init
-
 //unites 2 clusters
 cluster uniteClusters(cluster clusterA, cluster clusterB)
 {
@@ -320,21 +316,20 @@ double findRange(flow flowA, flow flowB, weights weights)
     );
 }
 
-
-//TODO - Range storage fill and pull
-
 //finds closest range between 2 clusters
 double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
 {
     //finds closest possible range between 2 clusters by checking ranges between every flow pair
     double closestFoundRange = INFINITY;
+    double currRange;
     for (int i = 0; i < netDotClusterA.flowCount; i++)
     {
         for (int j = 0; j < netDotClusterB.flowCount; j++)
         {
-            if(closestFoundRange > findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights))
+            currRange = findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights);
+            if(closestFoundRange > currRange)
             {
-                closestFoundRange = findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights);
+                closestFoundRange = currRange;
             }
         }
     }
@@ -347,15 +342,17 @@ int findClosestAndUnite(clusterStorage* storage, weights weights1)
     //preparing container for storing 2 indexes of clusters in cluster storage
     int closestInx[2];
     double closestFoundRange = INFINITY;
+    double currRange;
 
     //searches for closest pair
     for (int i = 0; i < storage->clusterCount-1; i++)
     {
         for (int j = i+1; j < storage->clusterCount; j++)
         {
-            if(closestFoundRange > findClosestRange(storage->clusters[i], storage->clusters[j], weights1))
+            currRange = findClosestRange(storage->clusters[i], storage->clusters[j], weights1);
+            if(closestFoundRange > currRange)
             {
-                closestFoundRange = findClosestRange(storage->clusters[i], storage->clusters[j], weights1);;
+                closestFoundRange = currRange;
                 closestInx[0] = i;
                 closestInx[1] = j;
             }
