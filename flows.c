@@ -9,6 +9,7 @@ enum programStage
     inputProcessing,
     fileOpen,
     fileRead,
+    clusterWrite,
     afterRead
 };
 
@@ -44,6 +45,8 @@ typedef struct SWeights
     double interTime;
     double interLength;
 }weights;
+
+//TODO - Range storage structure
 
 //function declaration (used only here for 1 purpose)
 void prepareForDelete(cluster* cluster);
@@ -100,7 +103,7 @@ int compareFlowsID(const void* a, const void* b)
 
 int compareClustersID(const void* a, const void* b)
 {
-    //we are sorting clusters by smallest first flow's ID (we assume, that flow in cluster were sorted)
+    //we are sorting clusters by smallest first flow's ID (we assume, that flows in cluster were sorted)
     int arg1 = ((const cluster*)a)->flowArr[0].flowID;
     int arg2 = ((const cluster*)b)->flowArr[0].flowID;
 
@@ -223,6 +226,7 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     return storage;
 }
 
+//TODO - Range storage init
 
 //unites 2 clusters
 cluster uniteClusters(cluster clusterA, cluster clusterB)
@@ -266,7 +270,7 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
     {
         return 1;
     }
-    
+
     //prepares united clusters for deletion
     prepareForDelete(clusterA);
     prepareForDelete(clusterB);
@@ -315,6 +319,9 @@ double findRange(flow flowA, flow flowB, weights weights)
     weights.interLength* squareFloat(flowA.avgInterLength - flowB.avgInterLength)
     );
 }
+
+
+//TODO - Range storage fill and pull
 
 //finds closest range between 2 clusters
 double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
@@ -365,6 +372,12 @@ int findClosestAndUnite(clusterStorage* storage, weights weights1)
 //finds and unites clusters until their number reaches wanted count
 int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
 {
+    //checking if destination cluster count is smaller or equal too actual cluster count
+    if (destClusterCount > storage->clusterCount)
+    {
+        finishProgram(afterRead, 1, 0, storage);
+        return 1;
+    }
     //if start count of clusters and destinations ones are not same starts cycle which finds and unites cluster
     //to the point when destination is reached
     if (destClusterCount != storage->clusterCount)
@@ -373,7 +386,7 @@ int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weight
         {
             if (findClosestAndUnite(storage, weights) != 0)
             {
-                return 0;
+                return 1;
             }
         }
         while (destClusterCount != storage->clusterCount);
@@ -419,15 +432,23 @@ int controlIP(FILE* srcFile)
 
         for (int n = 0; n < 4; n++)
         {
-            if (tmpIP[n] >= 0 && tmpIP[n] < 256)
+            if (!(tmpIP[n] >= 0 && tmpIP[n] < 256))
                 return 1;
         }
     }
     return 0;
 }
 
+void prepareClusterArrForDeletion(cluster *clusterArr, int allocClustersCount)
+{
+    for (int j = 0; j < allocClustersCount; j++)
+    {
+        prepareForDelete(&clusterArr[j]);
+    }
+}
+
 //creates cluster from source file
-clusterStorage collectInfoFromSourceFile(FILE* srcFile)
+int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
 {
     //init all essential variables for temporary storing data
     int currClusterCount;
@@ -438,7 +459,10 @@ clusterStorage collectInfoFromSourceFile(FILE* srcFile)
     double avgInterarrivalTime;
 
     //finds start cluster count
-    fscanf(srcFile, "count=%i\n", &currClusterCount);
+    if (fscanf(srcFile, "count=%i\n", &currClusterCount) != 1)
+    {
+        return 1;
+    }
 
     //init tmp cluster storage
     cluster tmpClusterArr[currClusterCount];
@@ -450,21 +474,54 @@ clusterStorage collectInfoFromSourceFile(FILE* srcFile)
     //traverses left source file lines scanning every line and storing important info to tmp variables
     for (int i = 0; i < currClusterCount; i++)
     {
-        fscanf(srcFile, "%i %*s %*s %i %i %i %lf\n",
-            &flowID, &totalBytes, &flowDuration,
-            &packetCount, &avgInterarrivalTime);
+        if (fscanf(srcFile, "%i ", &flowID) != 1)
+        {
+            finishProgram(fileRead, 1, srcFile, 0);
+            prepareClusterArrForDeletion(tmpClusterArr, i);
+            return 1;
+        }
+
+        if (flowID < 0)
+        {
+            finishProgram(fileRead, 1, srcFile, 0);
+            prepareClusterArrForDeletion(tmpClusterArr, i);
+            return 1;
+        }
+
+        if (controlIP(srcFile) == 1)
+        {
+            finishProgram(fileRead, 1, srcFile, 0);
+            prepareClusterArrForDeletion(tmpClusterArr, i);
+            return 1;
+        }
+
+        if (fscanf(srcFile, "%i %i %i %lf\n", &totalBytes, &flowDuration, &packetCount, &avgInterarrivalTime) != 4)
+        {
+            finishProgram(fileRead, 1, srcFile, 0);
+            prepareClusterArrForDeletion(tmpClusterArr, i);
+            return 1;
+        }
 
         //inits flow from tmp variables
         flows[0] =  initFlow(flowID, totalBytes, flowDuration, packetCount, avgInterarrivalTime);
 
         //creates cluster and appends it to temporary array
         tmpClusterArr[i] = initCluster(flows, 1);
+
+        if (tmpClusterArr[i].flowCount == -1)
+        {
+            finishProgram(fileRead, 1, srcFile, 0);
+            prepareClusterArrForDeletion(tmpClusterArr, i);
+            return 1;
+        }
     }
     //closes file
     fclose(srcFile);
 
     //returns results in form of cluster storage
-    return initClusterStorage(tmpClusterArr, currClusterCount);
+    *clusterStorage = initClusterStorage(tmpClusterArr, currClusterCount);
+
+    return 0;
 }
 
 //the place where every function's call starts
@@ -473,17 +530,7 @@ int main(int argc, char* argv[])
     //check if argument number is correct, if not stops program with error
     if (argc != 7)
     {
-        fprintf(stderr, "ERROR: Wrong arguments\n");
-        return 1;
-    }
-
-    //open file name of which was given
-    FILE* srcFile = fopen(argv[1], "r");
-
-    //if not opened not stops program with error
-    if (srcFile == NULL)
-    {
-        fprintf(stderr, "ERROR: Failed to open the file\n");
+        finishProgram(inputProcessing, 1, 0, 0);
         return 1;
     }
 
@@ -498,31 +545,48 @@ int main(int argc, char* argv[])
     //stores destination cluster count
     int destClusterCount = atoi(argv[2]);
 
+    if (destClusterCount <= 0)
+    {
+        finishProgram(inputProcessing, 1, 0, 0);
+        return 1;
+    }
+
+    //open file name of which was given
+    FILE* srcFile = fopen(argv[1], "r");
+
+    //if not opened not stops program with error
+    if (srcFile == NULL)
+    {
+        finishProgram(fileOpen, 1, 0, 0);
+        return 1;
+    }
+
     //forms cluster storage from source file
-    clusterStorage clusterStorage = collectInfoFromSourceFile(srcFile);
-    
+    clusterStorage clusterStorage;
+
+    if (collectInfoFromSourceFile(srcFile, &clusterStorage) == 1)
+    {
+        return 1;
+    }
+
+    //checking if clusterCStorage was properly allocated
     if (clusterStorage.clusterCount == -1)
     {
+        finishProgram(afterRead, 1, srcFile, &clusterStorage);
         return 1;
     }
 
     //starts uniting process
     if (uniteToNGroups(destClusterCount, &clusterStorage, weights) != 0)
     {
+        finishProgram(afterRead, 1, srcFile, &clusterStorage);
         return 1;
     }
 
     //prints out info about clusters
     infoOut(clusterStorage);
 
-    //prepares all clusters in cluster storage for deletion
-    for (int i = 0; i < clusterStorage.clusterCount; i++)
-    {
-        prepareForDelete(&(clusterStorage.clusters[i]));
-    }
-
-    //frees cluster storage
-    free(clusterStorage.clusters);
+    finishProgram(afterRead, 0, srcFile, &clusterStorage);
 
     return 0;
 }
