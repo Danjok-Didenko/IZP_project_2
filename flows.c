@@ -46,13 +46,53 @@ typedef struct SWeights
     double interLength;
 }weights;
 
-//TODO - Range storage structure
 
+typedef struct SRangeStorage
+{
+    int flowIDRange;
+    int smallestID;
+    double** ranges;
+}rangeStorage;
+
+
+void freeRangeStorage(rangeStorage* storage)
+{
+    if (storage->ranges != NULL)
+    {
+        for (int i = 0; i < storage->flowIDRange-1; i++)
+        {
+            if (storage->ranges[i] != NULL)
+            {
+                free(storage->ranges[i]);
+                storage->ranges[i] = NULL;
+            }
+        }
+        free(storage->ranges);
+        storage->ranges = NULL;
+    }
+
+}
 //function declaration (used only here for 1 purpose)
 void prepareForDelete(cluster* cluster);
+double findRange(flow flowA, flow flowB, weights weights);
+
+
+void freeClusterStorage(clusterStorage *clusterStorage)
+{
+    //prepares all clusters in cluster storage for deletion
+    for (int i = 0; i < clusterStorage->clusterCount; i++)
+    {
+        prepareForDelete(&(clusterStorage->clusters[i]));
+    }
+    //frees cluster storage if it was inited
+    if (clusterStorage->clusterCount !=-1)
+    {
+        free(clusterStorage->clusters);
+    }
+}
 
 //function for finishing program
-void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage *clusterStorage)
+void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage *clusterStorage, rangeStorage* rangeStorage)
 {
     switch (programStage)
     {
@@ -71,17 +111,8 @@ void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage
             {
                 fprintf(stderr, "Error: Some allocation failed\n");
             }
-            //prepares all clusters in cluster storage for deletion
-            for (int i = 0; i < clusterStorage->clusterCount; i++)
-            {
-                prepareForDelete(&(clusterStorage->clusters[i]));
-            }
-
-            //frees cluster storage if it was inited
-            if (clusterStorage->clusterCount !=-1)
-            {
-                free(clusterStorage->clusters);
-            }
+            freeClusterStorage(clusterStorage);
+            freeRangeStorage(rangeStorage);
             break;
 
         default:
@@ -226,7 +257,79 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     return storage;
 }
 
-//TODO - Range storage init
+int checkIfIDExists(flow* flowArr, int ID, int flowCount)
+{
+    for (int i = 0; i < flowCount; i++)
+    {
+        if (flowArr[i].flowID == ID)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+rangeStorage initRangeStorage(flow* flowArr, int flowCount, weights weights)
+{
+    sortFlowsByID(flowArr, flowCount);
+
+    rangeStorage storage;
+
+    storage.flowIDRange = flowArr[flowCount-1].flowID - flowArr[0].flowID + 1;
+    storage.smallestID = flowArr[0].flowID;
+
+    storage.ranges = malloc(sizeof(double*)*storage.flowIDRange);
+    if (storage.ranges == NULL)
+    {
+        storage.flowIDRange = -1;
+        return storage;
+    }
+
+    flow flowA;
+    flow flowB;
+
+    int realInxA;
+    int realInxB;
+
+    for (int n = 0; n < storage.flowIDRange-1; n++)
+    {
+        realInxA = checkIfIDExists(flowArr, n + storage.smallestID, flowCount);
+        if (realInxA == -1)
+            continue;
+
+        storage.ranges[n] = malloc(sizeof(double)*storage.flowIDRange);
+        if (storage.ranges[n] == NULL)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                free(storage.ranges[j]);
+                storage.ranges[j] = NULL;
+            }
+            free(storage.ranges);
+            storage.ranges = NULL;
+
+            storage.flowIDRange = -1;
+            return storage;
+        }
+
+        flowA = flowArr[realInxA];
+        for (int i = 1 + n; i < storage.flowIDRange; i++)
+        {
+            realInxB = checkIfIDExists(flowArr, i + storage.smallestID, flowCount);
+
+            if (realInxB == -1)
+                continue;
+
+            flowB = flowArr[realInxB];
+
+            storage.ranges[n][i] = findRange(flowA, flowB, weights);
+
+        }
+
+    }
+
+    return storage;
+}
 
 //unites 2 clusters
 cluster uniteClusters(cluster clusterA, cluster clusterB)
@@ -309,7 +412,7 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
     return 0;
 }
 
-//finds range between 2 netDots
+//finds range between 2 flows
 double findRange(flow flowA, flow flowB, weights weights)
 {
     return sqrt(
@@ -321,20 +424,34 @@ double findRange(flow flowA, flow flowB, weights weights)
 }
 
 
-//TODO - Range storage fill and pull
+double pullRange(rangeStorage storage, int flowIDA, int flowIDB)
+{
+    if (flowIDA > flowIDB)
+    {
+        return storage.ranges[flowIDB - storage.smallestID][flowIDA - storage.smallestID];
+    }
+    else if (flowIDA < flowIDB)
+    {
+        return storage.ranges[flowIDA - storage.smallestID][flowIDB - storage.smallestID];
+    }
+    else
+    {
+        return 0;
+    }
+}
 
 //finds closest range between 2 clusters
-double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
+double findClosestRange(cluster flowClusterA, cluster flowClusterB, rangeStorage rangeStorage)
 {
     //finds closest possible range between 2 clusters by checking ranges between every flow pair
     double closestFoundRange = INFINITY;
-    for (int i = 0; i < netDotClusterA.flowCount; i++)
+    for (int i = 0; i < flowClusterA.flowCount; i++)
     {
-        for (int j = 0; j < netDotClusterB.flowCount; j++)
+        for (int j = 0; j < flowClusterB.flowCount; j++)
         {
-            if(closestFoundRange > findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights))
+            if(closestFoundRange > pullRange(rangeStorage, flowClusterA.flowArr[i].flowID, flowClusterB.flowArr[j].flowID))
             {
-                closestFoundRange = findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights);
+                closestFoundRange = pullRange(rangeStorage, flowClusterA.flowArr[i].flowID, flowClusterB.flowArr[j].flowID);
             }
         }
     }
@@ -342,7 +459,7 @@ double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights 
 }
 
 //finds closest pair of clusters and returns array with united cluster
-int findClosestAndUnite(clusterStorage* storage, weights weights1)
+int findClosestAndUnite(clusterStorage* storage, rangeStorage rangeStorage)
 {
     //preparing container for storing 2 indexes of clusters in cluster storage
     int closestInx[2];
@@ -353,9 +470,9 @@ int findClosestAndUnite(clusterStorage* storage, weights weights1)
     {
         for (int j = i+1; j < storage->clusterCount; j++)
         {
-            if(closestFoundRange > findClosestRange(storage->clusters[i], storage->clusters[j], weights1))
+            if(closestFoundRange > findClosestRange(storage->clusters[i], storage->clusters[j], rangeStorage))
             {
-                closestFoundRange = findClosestRange(storage->clusters[i], storage->clusters[j], weights1);;
+                closestFoundRange = findClosestRange(storage->clusters[i], storage->clusters[j], rangeStorage);
                 closestInx[0] = i;
                 closestInx[1] = j;
             }
@@ -370,12 +487,12 @@ int findClosestAndUnite(clusterStorage* storage, weights weights1)
 }
 
 //finds and unites clusters until their number reaches wanted count
-int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
+int uniteToNGroups(int destClusterCount, clusterStorage* storage, rangeStorage *rangeStorage)
 {
     //checking if destination cluster count is smaller or equal too actual cluster count
     if (destClusterCount > storage->clusterCount)
     {
-        finishProgram(afterRead, 1, 0, storage);
+        finishProgram(afterRead, 1, 0, storage, rangeStorage);
         return 1;
     }
     //if start count of clusters and destinations ones are not same starts cycle which finds and unites cluster
@@ -384,7 +501,7 @@ int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weight
     {
         do
         {
-            if (findClosestAndUnite(storage, weights) != 0)
+            if (findClosestAndUnite(storage, *rangeStorage) != 0)
             {
                 return 1;
             }
@@ -448,7 +565,7 @@ void prepareClusterArrForDeletion(cluster *clusterArr, int allocClustersCount)
 }
 
 //creates cluster from source file
-int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
+int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage, rangeStorage *rangeStorage, weights weights)
 {
     //init all essential variables for temporary storing data
     int currClusterCount;
@@ -471,52 +588,61 @@ int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
     //so we just sore single number in array form
     flow flows[1];
 
+    flow flowArr[currClusterCount];
+
     //traverses left source file lines scanning every line and storing important info to tmp variables
     for (int i = 0; i < currClusterCount; i++)
     {
         if (fscanf(srcFile, "%i ", &flowID) != 1)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         if (flowID < 0)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         if (controlIP(srcFile) == 1)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         if (fscanf(srcFile, "%i %i %i %lf\n", &totalBytes, &flowDuration, &packetCount, &avgInterarrivalTime) != 4)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         //inits flow from tmp variables
         flows[0] =  initFlow(flowID, totalBytes, flowDuration, packetCount, avgInterarrivalTime);
+        flowArr[i] =  initFlow(flowID, totalBytes, flowDuration, packetCount, avgInterarrivalTime);
 
         //creates cluster and appends it to temporary array
         tmpClusterArr[i] = initCluster(flows, 1);
 
         if (tmpClusterArr[i].flowCount == -1)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
     }
     //closes file
     fclose(srcFile);
+
+    *rangeStorage = initRangeStorage(flowArr, currClusterCount, weights);
+    if (rangeStorage->flowIDRange == -1)
+    {
+        return 1;
+    }
 
     //returns results in form of cluster storage
     *clusterStorage = initClusterStorage(tmpClusterArr, currClusterCount);
@@ -530,7 +656,7 @@ int main(int argc, char* argv[])
     //check if argument number is correct, if not stops program with error
     if (argc != 7)
     {
-        finishProgram(inputProcessing, 1, 0, 0);
+        finishProgram(inputProcessing, 1, 0, 0, 0);
         return 1;
     }
 
@@ -547,7 +673,7 @@ int main(int argc, char* argv[])
 
     if (destClusterCount <= 0)
     {
-        finishProgram(inputProcessing, 1, 0, 0);
+        finishProgram(inputProcessing, 1, 0, 0, 0);
         return 1;
     }
 
@@ -557,14 +683,16 @@ int main(int argc, char* argv[])
     //if not opened not stops program with error
     if (srcFile == NULL)
     {
-        finishProgram(fileOpen, 1, 0, 0);
+        finishProgram(fileOpen, 1, 0, 0, 0);
         return 1;
     }
 
     //forms cluster storage from source file
     clusterStorage clusterStorage;
 
-    if (collectInfoFromSourceFile(srcFile, &clusterStorage) == 1)
+    rangeStorage rangeStorage;
+
+    if (collectInfoFromSourceFile(srcFile, &clusterStorage, &rangeStorage, weights) == 1)
     {
         return 1;
     }
@@ -572,21 +700,21 @@ int main(int argc, char* argv[])
     //checking if clusterCStorage was properly allocated
     if (clusterStorage.clusterCount == -1)
     {
-        finishProgram(afterRead, 1, srcFile, &clusterStorage);
+        finishProgram(afterRead, 1, srcFile, &clusterStorage, &rangeStorage);
         return 1;
     }
 
     //starts uniting process
-    if (uniteToNGroups(destClusterCount, &clusterStorage, weights) != 0)
+    if (uniteToNGroups(destClusterCount, &clusterStorage, &rangeStorage) != 0)
     {
-        finishProgram(afterRead, 1, srcFile, &clusterStorage);
+        finishProgram(afterRead, 1, srcFile, &clusterStorage, &rangeStorage);
         return 1;
     }
 
     //prints out info about clusters
     infoOut(clusterStorage);
 
-    finishProgram(afterRead, 0, srcFile, &clusterStorage);
+    finishProgram(afterRead, 0, srcFile, &clusterStorage, &rangeStorage);
 
     return 0;
 }
