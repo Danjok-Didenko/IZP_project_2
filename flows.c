@@ -46,8 +46,6 @@ typedef struct SWeights
     double interLength;
 }weights;
 
-//TODO - Range storage structure
-
 //function declaration (used only here for 1 purpose)
 void prepareForDelete(cluster* cluster);
 
@@ -226,8 +224,6 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     return storage;
 }
 
-//TODO - Range storage init
-
 //unites 2 clusters
 cluster uniteClusters(cluster clusterA, cluster clusterB)
 {
@@ -320,8 +316,6 @@ double findRange(flow flowA, flow flowB, weights weights)
     );
 }
 
-
-//TODO - Range storage fill and pull
 
 //finds closest range between 2 clusters
 double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
