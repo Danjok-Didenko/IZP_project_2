@@ -541,6 +541,8 @@ int main(int argc, char* argv[])
     weights.interTime = strtod(argv[5], &endptr);
     weights.interLength = strtod(argv[6], &endptr);
 
+    //TODO weight control
+
     //stores destination cluster count
     int destClusterCount = atoi(argv[2]);
 
