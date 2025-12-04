@@ -4,6 +4,26 @@
 #include <ctype.h>
 #include <stdbool.h>
 
+/** Flows v1LRS.1 (version with local range storing)
+ *  Created by Daniil Didenko
+ *  xlogin: xdidend00
+ *
+ *  *   *   *   *   *   *   *   USAGE   *   *   *   *   *   *   *   *   *
+ *                                                                      *
+ *  cc -std=c11 -Wall -Wextra -Werror -pedantic flows.c -o flows -lm    *
+ *  $ ./flows FILENAME N WB WT WD WS                                    *
+ *                                                                      *
+ *  *   *   *   *   *   *   *   *   *   *   *   *   *   *   *   *   *   *
+ *
+ *  @param FINENAME - Name of file where text data about flows is located
+ *  @param N -  Number of clusters we want to get
+ *  @param WB - Weight for totalBytes.
+ *  @param WT - Weight for flowDuration.
+ *  @param WD - Weight for averageInterTime.
+ *  @param WS - Weight for averageInterLength
+ *
+ */
+
 enum programStage
 {
     inputProcessing,
@@ -12,6 +32,12 @@ enum programStage
     clusterWrite,
     afterRead
 };
+
+typedef struct SRange
+{
+    int flowID;
+    double range;
+}range;
 
 //structure for storing all flow's arguments
 typedef struct SFlow
@@ -27,7 +53,9 @@ typedef struct SFlow
 typedef struct SCluster
 {
     int flowCount;
-    flow* flowArr;
+    int rangeCount;
+    range* ranges;
+    flow* flows;
 }cluster;
 
 //structure for storing all clusters as well as cluster count for more convenient use in functions
@@ -47,43 +75,48 @@ typedef struct SWeights
 }weights;
 
 //function declaration (used only here for 1 purpose)
-void prepareForDelete(cluster* cluster);
+void prepareForDelete(cluster* cluster, bool rangesCalculated);
+
+void freeAll(clusterStorage* storage, bool rangesCalculated)
+{
+    //prepares all clusters in cluster storage for deletion
+    for (int i = 0; i < storage->clusterCount; i++)
+    {
+        prepareForDelete(&(storage->clusters[i]), rangesCalculated);
+    }
+
+    //frees cluster storage if it was inited
+    if (storage->clusterCount !=-1)
+    {
+        free(storage->clusters);
+    }
+}
 
 //function for finishing program
-void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage *clusterStorage)
+void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage *storage, bool rangesCalculated)
 {
     switch (programStage)
     {
         case inputProcessing:
-            fprintf(stderr, "Error: Something is wrong with entered arguments\n");
+            fprintf(stderr, "ERROR: Something is wrong with entered arguments\n");
             break;
         case fileOpen:
-            fprintf(stderr, "Error: File failed to read\n");
+            fprintf(stderr, "ERROR: File failed to read\n");
             break;
         case fileRead:
             fclose(srcFile);
-            fprintf(stderr, "Error: Something is wrong with input file\n");
+            fprintf(stderr, "ERROR: Something is wrong with input file\n");
             break;
         case afterRead:
             if (isError)
             {
-                fprintf(stderr, "Error: Some allocation failed\n");
+                fprintf(stderr, "ERROR: Some allocation failed\n");
             }
-            //prepares all clusters in cluster storage for deletion
-            for (int i = 0; i < clusterStorage->clusterCount; i++)
-            {
-                prepareForDelete(&(clusterStorage->clusters[i]));
-            }
-
-            //frees cluster storage if it was inited
-            if (clusterStorage->clusterCount !=-1)
-            {
-                free(clusterStorage->clusters);
-            }
+            freeAll(storage, rangesCalculated);
             break;
 
         default:
-            fprintf(stderr, "Error: Something is wrong\n");
+            fprintf(stderr, "ERROR: Something is wrong\n");
     }
 }
 
@@ -102,8 +135,28 @@ int compareFlowsID(const void* a, const void* b)
 int compareClustersID(const void* a, const void* b)
 {
     //we are sorting clusters by smallest first flow's ID (we assume, that flows in cluster were sorted)
-    int arg1 = ((const cluster*)a)->flowArr[0].flowID;
-    int arg2 = ((const cluster*)b)->flowArr[0].flowID;
+    int arg1 = ((const cluster*)a)->flows[0].flowID;
+    int arg2 = ((const cluster*)b)->flows[0].flowID;
+
+    if (arg1 < arg2) return -1;
+    if (arg1 > arg2) return 1;
+    return 0;
+}
+
+int compareRanges(const void* a, const void* b)
+{
+    double arg1 = ((const range*)a)->range;
+    double arg2 = ((const range*)b)->range;
+
+    if (arg1 < arg2) return -1;
+    if (arg1 > arg2) return 1;
+    return 0;
+}
+
+int compareClustersByRange(const void* a, const void* b)
+{
+    double arg1 = ((const cluster*)a)->ranges[0].range;
+    double arg2 = ((const cluster*)b)->ranges[0].range;
 
     if (arg1 < arg2) return -1;
     if (arg1 > arg2) return 1;
@@ -124,6 +177,20 @@ void sortClustersByID(cluster* clusters, int clusterCount)
     qsort(clusters, clusterCount, sizeof(cluster), compareClustersID);
 }
 
+void sortRanges(range* ranges, int rangeCount)
+{
+    qsort(ranges, rangeCount, sizeof(range), compareRanges);
+}
+
+void sortRangesInCluster(cluster* cluster)
+{
+    qsort(cluster->ranges, cluster->rangeCount, sizeof(range), compareRanges);
+}
+
+void sortClustersByRange(clusterStorage* storage)
+{
+    qsort(storage->clusters, storage->clusterCount, sizeof(cluster), compareClustersByRange);
+}
 
 //Mathematical custom functions
 //-------------------------------------------------------------------------------------
@@ -178,19 +245,19 @@ cluster initCluster(flow flows[], int flowCount)
     //unsuccessful allocation check
     if (tmp == NULL)
     {
-        fprintf(stderr, "Error alloc failed\n");
+        fprintf(stderr, "ERROR alloc failed\n");
         cluster.flowCount = -1;
     }
     else
     {
         //if successful store pointer and place all data from given flow array to flow array inside the cluster
-        cluster.flowArr = tmp;
+        cluster.flows = tmp;
 
         //sorts flows by their ID
         sortFlowsByID(flows, flowCount);
         for (int i = 0; i < flowCount; i++)
         {
-            cluster.flowArr[i] = flows[i];
+            cluster.flows[i] = flows[i];
         }
     }
     return cluster;
@@ -209,7 +276,7 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     //unsuccessful allocation check
     if (tmp == NULL)
     {
-        fprintf(stderr, "Error alloc failed\n");
+        fprintf(stderr, "ERROR alloc failed\n");
         storage.clusterCount = -1;
     }
     else
@@ -224,6 +291,67 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
     return storage;
 }
 
+
+range initRange(int flowID, double rangeTo)
+{
+    range r;
+    r.flowID = flowID;
+    r.range = rangeTo;
+    return r;
+}
+
+
+int uniteRangesInClusters(cluster* clusterA, cluster* clusterB, cluster* unitedCluster)
+{
+    int matchCount = 0;
+    int writtenCount = 0;
+
+    for (int i = 1; i < clusterA->rangeCount; i++)
+    {
+        for (int j = 1; j < clusterB->rangeCount; j++)
+        {
+            if (clusterA->ranges[i].flowID == clusterB->ranges[j].flowID)
+                matchCount++;
+
+        }
+    }
+
+    unitedCluster->rangeCount = matchCount;
+
+    range* tmp = malloc(sizeof(range)*(unitedCluster->rangeCount));
+    //range tmp[unitedCluster->rangeCount];
+
+    if (tmp == NULL)
+    {
+        return 1;
+    }
+
+    for (int i = 1; i < clusterA->rangeCount; i++)
+    {
+        for (int j = 1; j < clusterB->rangeCount; j++)
+        {
+            if (clusterA->ranges[i].flowID == clusterB->ranges[j].flowID)
+            {
+                if (clusterA->ranges[i].range > clusterB->ranges[j].range)
+                {
+                    tmp[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterB->ranges[j].range);
+                }
+                else
+                {
+                    tmp[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterA->ranges[i].range);
+                }
+                writtenCount++;
+            }
+        }
+    }
+
+    unitedCluster->ranges = tmp;
+
+    sortRangesInCluster(unitedCluster);
+
+    return 0;
+}
+
 //unites 2 clusters
 cluster uniteClusters(cluster clusterA, cluster clusterB)
 {
@@ -233,27 +361,33 @@ cluster uniteClusters(cluster clusterA, cluster clusterB)
     //placing all flows from clusterA to united flow array
     for (int i = 0; i < clusterA.flowCount; i++)
     {
-        flows[i] = clusterA.flowArr[i];
+        flows[i] = clusterA.flows[i];
     }
     //placing all flows from clusterB to united flow array
     for (int i = 0; i < clusterB.flowCount; i++)
     {
-        flows[i+clusterA.flowCount] = clusterB.flowArr[i];
+        flows[i+clusterA.flowCount] = clusterB.flows[i];
     }
     return initCluster(flows, clusterA.flowCount + clusterB.flowCount);
 }
 
 //prepares cluster for delete
-void prepareForDelete(cluster* cluster)
+void prepareForDelete(cluster* cluster, bool rangesCalculated)
 {
     //frees flow array of cluster
-    free(cluster->flowArr);
+    free(cluster->flows);
 
     //replaces pointer with NULL
-    cluster->flowArr = NULL;
+    cluster->flows = NULL;
 
     //marks cluster as empty changing its flowCount with -1
     cluster->flowCount = -1;
+
+    if (rangesCalculated)
+    {
+        free(cluster->ranges);
+        cluster->ranges = NULL;
+    }
 }
 
 //unites 2 clusters and deletes originals
@@ -267,9 +401,14 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
         return 1;
     }
 
+    if (uniteRangesInClusters(clusterA, clusterB, &unitedCluster) == 1)
+    {
+        return 1;
+    }
+
     //prepares united clusters for deletion
-    prepareForDelete(clusterA);
-    prepareForDelete(clusterB);
+    prepareForDelete(clusterA, 1);
+    prepareForDelete(clusterB, 1);
 
     //traverses cluster storage
     for (int i = (storage->clusterCount)-1; i >= 0; i--)
@@ -295,7 +434,7 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
     //unsuccessful allocation check
     if (tmp == NULL)
     {
-        fprintf(stderr, "Error alloc failed\n");
+        fprintf(stderr, "ERROR alloc failed\n");
         return 1;
     }
     else
@@ -316,52 +455,49 @@ double findRange(flow flowA, flow flowB, weights weights)
     );
 }
 
-
-//finds closest range between 2 clusters
-double findClosestRange(cluster netDotClusterA, cluster netDotClusterB, weights weights)
+int calculateAndRecordRanges(clusterStorage* storage, weights weights)
 {
-    //finds closest possible range between 2 clusters by checking ranges between every flow pair
-    double closestFoundRange = INFINITY;
-    double currRange;
-
-    for (int i = 0; i < netDotClusterA.flowCount; i++)
+    int clusterCount = storage->clusterCount;
+    for (int i = 0; i < clusterCount; i++)
     {
-        for (int j = 0; j < netDotClusterB.flowCount; j++)
+        storage->clusters[i].rangeCount = clusterCount-1;
+
+        //printf("Calculating ranges for flowID: %i\n", storage->clusters[i].flows[0].flowID);
+
+        range* tmp = malloc(sizeof(range)*(clusterCount-1));
+
+        if (tmp == NULL)
         {
-            currRange = findRange(netDotClusterA.flowArr[i],netDotClusterB.flowArr[j], weights);
-            if(closestFoundRange > currRange)
-            {
-                closestFoundRange = currRange;
-            }
+            return 1;
         }
+
+        int writtenCount = 0;
+        for (int n = 0; n < clusterCount; n++)
+        {
+
+            if (n == i)
+            {
+                continue;
+            }
+            tmp[writtenCount] = initRange(storage->clusters[n].flows[0].flowID,
+                findRange(storage->clusters[n].flows[0], storage->clusters[i].flows[0], weights));
+            writtenCount++;
+        }
+
+        storage->clusters[i].ranges = tmp;
+        sortRangesInCluster(&storage->clusters[i]);
     }
-    return closestFoundRange;
+    return 0;
 }
 
 //finds closest pair of clusters and returns array with united cluster
-int findClosestAndUnite(clusterStorage* storage, weights weights1)
+int findClosestAndUnite(clusterStorage* storage)
 {
-    //preparing container for storing 2 indexes of clusters in cluster storage
-    int closestInx[2];
-    double closestFoundRange = INFINITY;
-    double currRange;
 
-    //searches for closest pair
-    for (int i = 0; i < storage->clusterCount-1; i++)
-    {
-        for (int j = i+1; j < storage->clusterCount; j++)
-        {
-            currRange = findClosestRange(storage->clusters[i], storage->clusters[j], weights1);
-            if(closestFoundRange > currRange)
-            {
-                closestFoundRange = currRange;
-                closestInx[0] = i;
-                closestInx[1] = j;
-            }
-        }
-    }
+    sortClustersByRange(storage);
+
     //unites found closest pair and appends it to cluster storage, and checks, if everything is ok
-    if (uniteAndDelete(storage, &storage->clusters[closestInx[0]], &storage->clusters[closestInx[1]]) != 0)
+    if (uniteAndDelete(storage, &storage->clusters[0], &storage->clusters[1]) != 0)
     {
         return 1;
     }
@@ -374,19 +510,27 @@ int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weight
     //checking if destination cluster count is smaller or equal too actual cluster count
     if (destClusterCount > storage->clusterCount)
     {
-        finishProgram(afterRead, 1, 0, storage);
+        fprintf(stderr, "ERROR: destination cluster count is langer than given cluster number\n");
+        finishProgram(afterRead, 0, 0, storage, 0);
         return 1;
     }
     //if start count of clusters and destinations ones are not same starts cycle which finds and unites cluster
     //to the point when destination is reached
     if (destClusterCount != storage->clusterCount)
     {
+        if (calculateAndRecordRanges(storage, weights) == 1)
+        {
+            finishProgram(afterRead, 1, 0, storage, 1);
+            return 1;
+        }
         do
         {
-            if (findClosestAndUnite(storage, weights) != 0)
+            if (findClosestAndUnite(storage) != 0)
             {
+                finishProgram(afterRead, 1, 0, storage, 1);
                 return 1;
             }
+            //printf("%i\n", storage->clusterCount);
         }
         while (destClusterCount != storage->clusterCount);
     }
@@ -403,7 +547,7 @@ void clusterOut(cluster cluster, int clusterInx)
 
     for (int i = 0; i < cluster.flowCount; i++)
     {
-        printf("%i ", cluster.flowArr[i].flowID);
+        printf("%i ", cluster.flows[i].flowID);
     }
     printf("\n");
 }
@@ -442,7 +586,7 @@ void prepareClusterArrForDeletion(cluster *clusterArr, int allocClustersCount)
 {
     for (int j = 0; j < allocClustersCount; j++)
     {
-        prepareForDelete(&clusterArr[j]);
+        prepareForDelete(&clusterArr[j], 0);
     }
 }
 
@@ -475,28 +619,28 @@ int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
     {
         if (fscanf(srcFile, "%i ", &flowID) != 1)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         if (flowID < 0)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         if (controlIP(srcFile) == 1)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
 
         if (fscanf(srcFile, "%i %i %i %lf\n", &totalBytes, &flowDuration, &packetCount, &avgInterarrivalTime) != 4)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
@@ -509,7 +653,7 @@ int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
 
         if (tmpClusterArr[i].flowCount == -1)
         {
-            finishProgram(fileRead, 1, srcFile, 0);
+            finishProgram(fileRead, 1, srcFile, 0, 0);
             prepareClusterArrForDeletion(tmpClusterArr, i);
             return 1;
         }
@@ -529,7 +673,7 @@ int main(int argc, char* argv[])
     //check if argument number is correct, if not stops program with error
     if (argc != 7)
     {
-        finishProgram(inputProcessing, 1, 0, 0);
+        finishProgram(inputProcessing, 1, 0, 0, 0);
         return 1;
     }
 
@@ -544,7 +688,7 @@ int main(int argc, char* argv[])
     //weights control
     if (weights.bytes < 0 || weights.duration < 0 || weights.interTime < 0 || weights.interLength < 0)
     {
-        finishProgram(inputProcessing, 1, 0, 0);
+        finishProgram(inputProcessing, 1, 0, 0, 0);
         return 1;
     }
 
@@ -553,7 +697,7 @@ int main(int argc, char* argv[])
 
     if (destClusterCount <= 0)
     {
-        finishProgram(inputProcessing, 1, 0, 0);
+        finishProgram(inputProcessing, 1, 0, 0, 0);
         return 1;
     }
 
@@ -563,7 +707,7 @@ int main(int argc, char* argv[])
     //if not opened not stops program with error
     if (srcFile == NULL)
     {
-        finishProgram(fileOpen, 1, 0, 0);
+        finishProgram(fileOpen, 1, 0, 0, 0);
         return 1;
     }
 
@@ -578,21 +722,21 @@ int main(int argc, char* argv[])
     //checking if clusterCStorage was properly allocated
     if (clusterStorage.clusterCount == -1)
     {
-        finishProgram(afterRead, 1, srcFile, &clusterStorage);
+        finishProgram(afterRead, 1, srcFile, &clusterStorage, 0);
         return 1;
     }
 
+    bool isEqualCount = destClusterCount == clusterStorage.clusterCount;
     //starts uniting process
     if (uniteToNGroups(destClusterCount, &clusterStorage, weights) != 0)
     {
-        finishProgram(afterRead, 1, srcFile, &clusterStorage);
         return 1;
     }
 
     //prints out info about clusters
     infoOut(clusterStorage);
 
-    finishProgram(afterRead, 0, srcFile, &clusterStorage);
+    finishProgram(afterRead, 0, srcFile, &clusterStorage, !isEqualCount);
 
     return 0;
 }
