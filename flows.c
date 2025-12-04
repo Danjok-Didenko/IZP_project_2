@@ -37,7 +37,7 @@ typedef struct SRange
 {
     int flowID;
     double range;
-}range;
+}Range;
 
 //structure for storing all flow's arguments
 typedef struct SFlow
@@ -47,23 +47,23 @@ typedef struct SFlow
     int flowDuration;
     double avgInterTime;
     double avgInterLength;
-}flow;
+}Flow;
 
 //structure for storing all clusters flows as well as flow's count for more convenient use
 typedef struct SCluster
 {
     int flowCount;
     int rangeCount;
-    range* ranges;
-    flow* flows;
-}cluster;
+    Range* ranges;
+    Flow* flows;
+}Cluster;
 
 //structure for storing all clusters as well as cluster count for more convenient use in functions
 typedef struct SClusterStorage
 {
     int clusterCount;
-    cluster* clusters;
-}clusterStorage;
+    Cluster* clusters;
+}ClusterStorage;
 
 //structure for storing all user-entered weights in one place for more convenient usage in functions
 typedef struct SWeights
@@ -72,12 +72,12 @@ typedef struct SWeights
     double duration;
     double interTime;
     double interLength;
-}weights;
+}Weights;
 
 //function declaration (used only here for 1 purpose)
-void prepareForDelete(cluster* cluster, bool rangesCalculated);
+void prepareForDelete(Cluster* cluster, bool rangesCalculated);
 
-void freeAll(clusterStorage* storage, bool rangesCalculated)
+void freeAll(ClusterStorage* storage, bool rangesCalculated)
 {
     //prepares all clusters in cluster storage for deletion
     for (int i = 0; i < storage->clusterCount; i++)
@@ -93,7 +93,7 @@ void freeAll(clusterStorage* storage, bool rangesCalculated)
 }
 
 //function for finishing program
-void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage *storage, bool rangesCalculated)
+void finishProgram(int programStage, bool isError, FILE* srcFile, ClusterStorage *storage, bool rangesCalculated)
 {
     switch (programStage)
     {
@@ -124,8 +124,8 @@ void finishProgram(int programStage, bool isError, FILE* srcFile, clusterStorage
 int compareFlowsID(const void* a, const void* b)
 {
     //we are sorting flows by flowIDs, so we compare them
-    int arg1 = ((const flow*)a)->flowID;
-    int arg2 = ((const flow*)b)->flowID;
+    int arg1 = ((const Flow*)a)->flowID;
+    int arg2 = ((const Flow*)b)->flowID;
 
     if (arg1 < arg2) return -1;
     if (arg1 > arg2) return 1;
@@ -135,8 +135,8 @@ int compareFlowsID(const void* a, const void* b)
 int compareClustersID(const void* a, const void* b)
 {
     //we are sorting clusters by smallest first flow's ID (we assume, that flows in cluster were sorted)
-    int arg1 = ((const cluster*)a)->flows[0].flowID;
-    int arg2 = ((const cluster*)b)->flows[0].flowID;
+    int arg1 = ((const Cluster*)a)->flows[0].flowID;
+    int arg2 = ((const Cluster*)b)->flows[0].flowID;
 
     if (arg1 < arg2) return -1;
     if (arg1 > arg2) return 1;
@@ -145,8 +145,8 @@ int compareClustersID(const void* a, const void* b)
 
 int compareRanges(const void* a, const void* b)
 {
-    double arg1 = ((const range*)a)->range;
-    double arg2 = ((const range*)b)->range;
+    double arg1 = ((const Range*)a)->range;
+    double arg2 = ((const Range*)b)->range;
 
     if (arg1 < arg2) return -1;
     if (arg1 > arg2) return 1;
@@ -155,8 +155,8 @@ int compareRanges(const void* a, const void* b)
 
 int compareClustersByRange(const void* a, const void* b)
 {
-    double arg1 = ((const cluster*)a)->ranges[0].range;
-    double arg2 = ((const cluster*)b)->ranges[0].range;
+    double arg1 = ((const Cluster*)a)->ranges[0].range;
+    double arg2 = ((const Cluster*)b)->ranges[0].range;
 
     if (arg1 < arg2) return -1;
     if (arg1 > arg2) return 1;
@@ -164,32 +164,32 @@ int compareClustersByRange(const void* a, const void* b)
 }
 
 //sort flow array by smallest flowID
-void sortFlowsByID(flow* flowArr, int flowCount)
+void sortFlowsByID(Flow* flowArr, int flowCount)
 {
     //just use qsort function
-    qsort(flowArr, flowCount, sizeof(flow), compareFlowsID);
+    qsort(flowArr, flowCount, sizeof(Flow), compareFlowsID);
 }
 
 //sort flow array by smallest flowID
-void sortClustersByID(cluster* clusters, int clusterCount)
+void sortClustersByID(Cluster* clusters, int clusterCount)
 {
     //just use qsort function
-    qsort(clusters, clusterCount, sizeof(cluster), compareClustersID);
+    qsort(clusters, clusterCount, sizeof(Cluster), compareClustersID);
 }
 
-void sortRanges(range* ranges, int rangeCount)
+void sortRanges(Range* ranges, int rangeCount)
 {
-    qsort(ranges, rangeCount, sizeof(range), compareRanges);
+    qsort(ranges, rangeCount, sizeof(Range), compareRanges);
 }
 
-void sortRangesInCluster(cluster* cluster)
+void sortRangesInCluster(Cluster* cluster)
 {
-    qsort(cluster->ranges, cluster->rangeCount, sizeof(range), compareRanges);
+    qsort(cluster->ranges, cluster->rangeCount, sizeof(Range), compareRanges);
 }
 
-void sortClustersByRange(clusterStorage* storage)
+void sortClustersByRange(ClusterStorage* storage)
 {
-    qsort(storage->clusters, storage->clusterCount, sizeof(cluster), compareClustersByRange);
+    qsort(storage->clusters, storage->clusterCount, sizeof(Cluster), compareClustersByRange);
 }
 
 //Mathematical custom functions
@@ -219,10 +219,10 @@ double calculateAvgInterLength(int totalBytes, int packetCount)
 }
 
 //initialises flow with entered params
-flow initFlow(int flowID, int totalBytes, int flowDuration, int packetCount, double avgInterarrivalTime)
+Flow initFlow(int flowID, int totalBytes, int flowDuration, int packetCount, double avgInterarrivalTime)
 {
     //just creating new flow type variable and placing values in it
-    flow flow;
+    Flow flow;
     flow.flowID = flowID;
     flow.totalBytes = totalBytes;
     flow.flowDuration = flowDuration;
@@ -233,14 +233,14 @@ flow initFlow(int flowID, int totalBytes, int flowDuration, int packetCount, dou
 }
 
 //creates cluster with given flows and given number
-cluster initCluster(flow flows[], int flowCount)
+Cluster initCluster(Flow flows[], int flowCount)
 {
     //create cluster type variable
-    cluster cluster;
+    Cluster cluster;
 
     //alloc memory for given flow count
     cluster.flowCount = flowCount;
-    flow* tmp = malloc(sizeof(flow)*flowCount);
+    Flow* tmp = malloc(sizeof(Flow)*flowCount);
 
     //unsuccessful allocation check
     if (tmp == NULL)
@@ -264,14 +264,14 @@ cluster initCluster(flow flows[], int flowCount)
 }
 
 //creates cluster storage from given clusters and their count
-clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
+ClusterStorage initClusterStorage(Cluster clusters[], int clusterCount)
 {
     //create empty cluster storage
-    clusterStorage storage;
+    ClusterStorage storage;
 
     //allocate memory for given cluster count
     storage.clusterCount = clusterCount;
-    cluster* tmp = malloc(sizeof(cluster)*clusterCount);
+    Cluster* tmp = malloc(sizeof(Cluster)*clusterCount);
 
     //unsuccessful allocation check
     if (tmp == NULL)
@@ -292,16 +292,16 @@ clusterStorage initClusterStorage(cluster clusters[], int clusterCount)
 }
 
 
-range initRange(int flowID, double rangeTo)
+Range initRange(int flowID, double rangeTo)
 {
-    range r;
+    Range r;
     r.flowID = flowID;
     r.range = rangeTo;
     return r;
 }
 
 
-int uniteRangesInClusters(cluster* clusterA, cluster* clusterB, cluster* unitedCluster)
+int uniteRangesInClusters(Cluster* clusterA, Cluster* clusterB, Cluster* unitedCluster)
 {
     int matchCount = 0;
     int writtenCount = 0;
@@ -318,7 +318,7 @@ int uniteRangesInClusters(cluster* clusterA, cluster* clusterB, cluster* unitedC
 
     unitedCluster->rangeCount = matchCount;
 
-    range* tmp = malloc(sizeof(range)*(unitedCluster->rangeCount));
+    Range* tmp = malloc(sizeof(Range)*(unitedCluster->rangeCount));
     //range tmp[unitedCluster->rangeCount];
 
     if (tmp == NULL)
@@ -353,10 +353,10 @@ int uniteRangesInClusters(cluster* clusterA, cluster* clusterB, cluster* unitedC
 }
 
 //unites 2 clusters
-cluster uniteClusters(cluster clusterA, cluster clusterB)
+Cluster uniteClusters(Cluster clusterA, Cluster clusterB)
 {
     //create array for storing flows by flowCounts from both clusters
-    flow flows[clusterA.flowCount + clusterB.flowCount];
+    Flow flows[clusterA.flowCount + clusterB.flowCount];
 
     //placing all flows from clusterA to united flow array
     for (int i = 0; i < clusterA.flowCount; i++)
@@ -372,7 +372,7 @@ cluster uniteClusters(cluster clusterA, cluster clusterB)
 }
 
 //prepares cluster for delete
-void prepareForDelete(cluster* cluster, bool rangesCalculated)
+void prepareForDelete(Cluster* cluster, bool rangesCalculated)
 {
     //frees flow array of cluster
     free(cluster->flows);
@@ -391,10 +391,10 @@ void prepareForDelete(cluster* cluster, bool rangesCalculated)
 }
 
 //unites 2 clusters and deletes originals
-int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB)
+int uniteAndDelete(ClusterStorage* storage, Cluster *clusterA, Cluster *clusterB)
 {
     //call function which creates united cluster
-    cluster unitedCluster = uniteClusters(*clusterA, *clusterB);
+    Cluster unitedCluster = uniteClusters(*clusterA, *clusterB);
 
     if (unitedCluster.flowCount == -1)
     {
@@ -430,7 +430,7 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
     storage->clusters[(storage->clusterCount)-1] = unitedCluster;
 
     //realloc to new address
-    cluster *tmp = realloc(storage->clusters, sizeof(cluster)*storage->clusterCount);
+    Cluster *tmp = realloc(storage->clusters, sizeof(Cluster)*storage->clusterCount);
     //unsuccessful allocation check
     if (tmp == NULL)
     {
@@ -445,7 +445,7 @@ int uniteAndDelete(clusterStorage* storage, cluster *clusterA, cluster *clusterB
 }
 
 //finds range between 2 netDots
-double findRange(flow flowA, flow flowB, weights weights)
+double findRange(Flow flowA, Flow flowB, Weights weights)
 {
     return sqrt(
     weights.bytes*squareInt(flowA.totalBytes - flowB.totalBytes) +
@@ -455,7 +455,7 @@ double findRange(flow flowA, flow flowB, weights weights)
     );
 }
 
-int calculateAndRecordRanges(clusterStorage* storage, weights weights)
+int calculateAndRecordRanges(ClusterStorage* storage, Weights weights)
 {
     int clusterCount = storage->clusterCount;
     for (int i = 0; i < clusterCount; i++)
@@ -464,7 +464,7 @@ int calculateAndRecordRanges(clusterStorage* storage, weights weights)
 
         //printf("Calculating ranges for flowID: %i\n", storage->clusters[i].flows[0].flowID);
 
-        range* tmp = malloc(sizeof(range)*(clusterCount-1));
+        Range* tmp = malloc(sizeof(Range)*(clusterCount-1));
 
         if (tmp == NULL)
         {
@@ -491,7 +491,7 @@ int calculateAndRecordRanges(clusterStorage* storage, weights weights)
 }
 
 //finds closest pair of clusters and returns array with united cluster
-int findClosestAndUnite(clusterStorage* storage)
+int findClosestAndUnite(ClusterStorage* storage)
 {
 
     sortClustersByRange(storage);
@@ -505,7 +505,7 @@ int findClosestAndUnite(clusterStorage* storage)
 }
 
 //finds and unites clusters until their number reaches wanted count
-int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weights)
+int uniteToNGroups(int destClusterCount, ClusterStorage* storage, Weights weights)
 {
     //checking if destination cluster count is smaller or equal too actual cluster count
     if (destClusterCount > storage->clusterCount)
@@ -541,7 +541,7 @@ int uniteToNGroups(int destClusterCount, clusterStorage* storage, weights weight
 }
 
 //prints info about exact cluster
-void clusterOut(cluster cluster, int clusterInx)
+void clusterOut(Cluster cluster, int clusterInx)
 {
     printf("cluster %i: ", clusterInx);
 
@@ -553,7 +553,7 @@ void clusterOut(cluster cluster, int clusterInx)
 }
 
 //prints info about all clusters
-void infoOut(clusterStorage storage)
+void infoOut(ClusterStorage storage)
 {
     printf("Clusters:\n");
 
@@ -582,7 +582,7 @@ int controlIP(FILE* srcFile)
     return 0;
 }
 
-void prepareClusterArrForDeletion(cluster *clusterArr, int allocClustersCount)
+void prepareClusterArrForDeletion(Cluster *clusterArr, int allocClustersCount)
 {
     for (int j = 0; j < allocClustersCount; j++)
     {
@@ -591,7 +591,7 @@ void prepareClusterArrForDeletion(cluster *clusterArr, int allocClustersCount)
 }
 
 //creates cluster from source file
-int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
+int collectInfoFromSourceFile(FILE* srcFile, ClusterStorage *clusterStorage)
 {
     //init all essential variables for temporary storing data
     int currClusterCount;
@@ -608,11 +608,11 @@ int collectInfoFromSourceFile(FILE* srcFile, clusterStorage *clusterStorage)
     }
 
     //init tmp cluster storage
-    cluster tmpClusterArr[currClusterCount];
+    Cluster tmpClusterArr[currClusterCount];
 
     //all clusters in start have only 1 flow, but intCluster function requires array,
     //so we just sore single number in array form
-    flow flows[1];
+    Flow flows[1];
 
     //traverses left source file lines scanning every line and storing important info to tmp variables
     for (int i = 0; i < currClusterCount; i++)
@@ -678,7 +678,7 @@ int main(int argc, char* argv[])
     }
 
     //inits weights united storage and stores all given data in it
-    weights weights;
+    Weights weights;
     char *endptr;
     weights.bytes = strtod(argv[3], &endptr);
     weights.duration = strtod(argv[4], &endptr);
@@ -712,7 +712,7 @@ int main(int argc, char* argv[])
     }
 
     //forms cluster storage from source file
-    clusterStorage clusterStorage;
+    ClusterStorage clusterStorage;
 
     if (collectInfoFromSourceFile(srcFile, &clusterStorage) == 1)
     {
