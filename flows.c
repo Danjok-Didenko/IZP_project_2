@@ -150,6 +150,18 @@ int compareClustersID(const void* a, const void* b)
     return 0;
 }
 
+int compareClustersFlowCount(const void* a, const void* b)
+{
+    // we are sorting clusters by biggest first flow's ID
+    // (we assume, that flows in cluster were sorted)
+    int arg1 = ((const Cluster*)a)->flowCount;
+    int arg2 = ((const Cluster*)b)->flowCount;
+
+    if (arg1 < arg2) return 1;
+    if (arg1 > arg2) return -1;
+    return 0;
+}
+
 int compareRanges(const void* a, const void* b)
 {
     // comparing ranges
@@ -184,6 +196,13 @@ void sortClustersByID(Cluster* clusters, int clusterCount)
 {
     // just use qsort function
     qsort(clusters, clusterCount, sizeof(Cluster), compareClustersID);
+}
+
+// sort flow array by biggest flowCount
+void sortClustersFlowCount(Cluster* clusters, int clusterCount)
+{
+    // just use qsort function
+    qsort(clusters, clusterCount, sizeof(Cluster), compareClustersFlowCount);
 }
 
 // sort ranges from smallest to biggest
@@ -319,27 +338,13 @@ Range initRange(int flowID, double rangeTo)
 int uniteRangesInClusters(Cluster* clusterA, Cluster* clusterB, Cluster* unitedCluster)
 {
     // init tmp variable used inside the function
-    int matchCount = 0;
     int writtenCount = 0;
 
-    // calculating matching ranges count (match by same flowID)
-    for (int i = 1; i < clusterA->rangeCount; i++)
-    {
-        for (int j = 1; j < clusterB->rangeCount; j++)
-        {
-            if (clusterA->ranges[i].flowID == clusterB->ranges[j].flowID)
-                matchCount++;
-
-        }
-    }
-    
-    unitedCluster->rangeCount = matchCount;
-
-    // allocating tmp range array for united cluster list 
-    Range* tmp = malloc(sizeof(Range)*(unitedCluster->rangeCount));
+    // allocating tmp range array for united cluster list
+    Range* tmp1 = malloc(sizeof(Range)*(clusterA->rangeCount + clusterB->rangeCount));
 
     // unsuccessful allocation check
-    if (tmp == NULL)
+    if (tmp1 == NULL)
     {
         return 1;
     }
@@ -353,15 +358,37 @@ int uniteRangesInClusters(Cluster* clusterA, Cluster* clusterB, Cluster* unitedC
             {
                 if (clusterA->ranges[i].range > clusterB->ranges[j].range)
                 {
-                    tmp[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterB->ranges[j].range);
+                    tmp1[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterB->ranges[j].range);
                 }
                 else
                 {
-                    tmp[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterA->ranges[i].range);
+                    tmp1[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterA->ranges[i].range);
                 }
                 writtenCount++;
+                break;
             }
         }
+    }
+
+    if (writtenCount == 0)
+    {
+        unitedCluster->rangeCount = 1;
+    }
+    else
+    {
+        unitedCluster->rangeCount = writtenCount;
+    }
+
+    // allocating tmp range array for united cluster list
+    Range* tmp = realloc(tmp1, sizeof(Range)*(unitedCluster->rangeCount));
+
+
+
+    // unsuccessful allocation check
+    if (tmp == NULL)
+    {
+        free(tmp1);
+        return 1;
     }
 
     // putting new range array to united cluster
@@ -434,18 +461,9 @@ int uniteAndDelete(ClusterStorage* storage, Cluster *clusterA, Cluster *clusterB
     prepareForDelete(clusterA, 1);
     prepareForDelete(clusterB, 1);
 
-    // traverses cluster storage
-    for (int i = (storage->clusterCount)-1; i >= 0; i--)
-    {
-        // if finds empty cluster, deletes it leaving no empty places in array
-        if (storage->clusters[i].flowCount == -1)
-        {
-            for (int n = i; n < (storage->clusterCount)-1; n++)
-            {
-                storage->clusters[n] = storage->clusters[n+1];
-            }
-        }
-    }
+    // sorting clusters by flowCount from biggest to smallest,
+    // so empty clusters marked with flowCount -1 will be in the end
+    sortClustersFlowCount(storage->clusters, storage->clusterCount);
 
     // update clusterCount
     (storage->clusterCount)--;
