@@ -328,7 +328,10 @@ int uniteRangesInClusters(Cluster* clusterA, Cluster* clusterB, Cluster* unitedC
         for (int j = 1; j < clusterB->rangeCount; j++)
         {
             if (clusterA->ranges[i].flowID == clusterB->ranges[j].flowID)
+            {
                 matchCount++;
+                break;
+            }
 
         }
     }
@@ -360,6 +363,7 @@ int uniteRangesInClusters(Cluster* clusterA, Cluster* clusterB, Cluster* unitedC
                     tmp[writtenCount] = initRange(clusterA->ranges[i].flowID, clusterA->ranges[i].range);
                 }
                 writtenCount++;
+                break;
             }
         }
     }
