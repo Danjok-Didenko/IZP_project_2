@@ -733,7 +733,7 @@ int main(int argc, char* argv[])
     Weights weights;
 
     // stores destination cluster count
-    int destClusterCount = atoi(argv[2]);
+    int destClusterCount;
 
     if (collectInfoFromInput(argc, argv, &weights, &destClusterCount) == 1)
     {
