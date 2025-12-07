@@ -8,8 +8,7 @@ cc -std=c11 -Wall -Wextra -Werror -pedantic flows.c -o flows -lm
 ```
 **Where**:
 
-FINENAME - Name of file where text data about flows is located
-
+FINENAME - Name of file where text data about flows is located<br>
 N -  Number of clusters we want to get
 
 WB - Weight for totalBytes
