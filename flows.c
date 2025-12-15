@@ -559,6 +559,13 @@ int uniteToNGroups(int destClusterCount, ClusterStorage* storage, Weights weight
         finishProgram(afterRead, 0, 0, storage, 0);
         return 1;
     }
+    // in case we need only to write sorted clusters, we only sort clusters by flowID
+    if (destClusterCount == -1)
+    {
+        // sorts clusters in storage
+        sortClustersByID(storage->clusters, storage->clusterCount);
+        return 0;
+    }
     // if start count of clusters and destinations ones are not same
     // starts cycle which finds and unites cluster
     // to the point when destination is reached
@@ -640,9 +647,17 @@ int collectInfoFromInput(int argc, char* argv[], Weights* weights, int* destClus
     // check if argument number is correct, if not stops program with error
     if (argc != 7)
     {
+        //if we have only filename entered we mark it by unreal destClusterCount
+        if (argc == 2)
+        {
+            *destClusterCount = -1;
+            return 0;
+        }
         return 1;
     }
+
     *destClusterCount = atoi(argv[2]);
+
 
     // stores all given data in weights united storage
     char *endptr;
@@ -779,7 +794,7 @@ int main(int argc, char* argv[])
     infoOut(clusterStorage);
 
     // finishes program (does all frees and exc.)
-    finishProgram(afterRead, 0, srcFile, &clusterStorage, !isEqualCount);
+    finishProgram(afterRead, 0, srcFile, &clusterStorage, !isEqualCount && destClusterCount != -1);
 
     return 0;
 }
